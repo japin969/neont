@@ -213,10 +213,6 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                 settings = appSettings,
                 fileDb = fileDb,
                 onChatClick = { chatId -> currentScreen = Screen.Chat(chatId) },
-                onContactClick = { user -> currentScreen = Screen.UserProfile(user) },
-                onSearchClick = { currentScreen = Screen.Search }, // Sementara ke settings dulu
-                onSearchClick = { currentScreen = Screen.Search },
-                onContactClick = { user -> currentScreen = Screen.UserProfile(user) }
             )
         }
         is Screen.Chat -> {
@@ -268,8 +264,6 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                 onPrivacyClick = { currentScreen = Screen.Privacy },
                 onNotificationClick = { currentScreen = Screen.Notification },
                 onLogoutClick = { /* TODO: Login */ },
-                onSearchClick = { currentScreen = Screen.Search },
-                onContactClick = { user -> currentScreen = Screen.UserProfile(user) },
             )
         }
         is Screen.Privacy -> {
@@ -340,7 +334,6 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                 contacts = contacts,
                 fileDb = fileDb,
                 onChatClick = { chatId -> currentScreen = Screen.Chat(chatId) },
-                onContactClick = { user -> currentScreen = Screen.UserProfile(user) }
             )
         }
         is Screen.UserProfile -> {
