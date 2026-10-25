@@ -11,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "app.neon.com"
-        minSdk = 26
+        minSdk = 24
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
@@ -33,6 +33,7 @@ android {
     }
 
     compileOptions {
+        coreLibraryDesugaringEnabled true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -47,6 +48,7 @@ android {
 }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     // Jetpack Compose BOM
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)
