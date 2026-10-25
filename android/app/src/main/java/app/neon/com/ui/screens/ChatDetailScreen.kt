@@ -51,6 +51,7 @@ fun ChatDetailScreen(
     onDeleteMessage: (msg: Message) -> Unit = {},
     onCallClick: () -> Unit = {},
     onAttachClick: (String) -> Unit = {},
+    onMicClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
@@ -239,6 +240,7 @@ fun ChatDetailScreen(
                 },
                 onTyping = onTyping,
                 onAttachClick = { showAttachSheet = true },
+                onMicClick = onMicClick,
                 onEmojiClick = { showEmojiKeyboard = !showEmojiKeyboard }
             )
 

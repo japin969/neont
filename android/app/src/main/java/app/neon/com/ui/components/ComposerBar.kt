@@ -39,6 +39,7 @@ fun ComposerBar(
     onTyping: (Boolean) -> Unit = {},
     onAttachClick: () -> Unit = {},
     onEmojiClick: () -> Unit = {},
+    onMicClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // rememberSaveable to prevent losing draft on recomposition/configuration change
@@ -142,6 +143,8 @@ fun ComposerBar(
                         val messageToSend = text.trim()
                         text = ""
                         onSendMessage(messageToSend)
+                    } else {
+                        onMicClick()
                     }
                 },
             contentAlignment = Alignment.Center

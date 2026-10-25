@@ -3,6 +3,7 @@ package app.neon.com
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -23,6 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import app.neon.com.data.AudioRecorder
 import app.neon.com.data.ChatRepository
 import app.neon.com.data.FileDatabaseManager
 import app.neon.com.data.FilebaseStorage
@@ -56,16 +58,12 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun AppRoot(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Context) {
-    // State buat update
     var updateInfo by remember { mutableStateOf<UpdateChecker.UpdateInfo?>(null) }
     var isChecking by remember { mutableStateOf(true) }
 
-    // Cek update pas aplikasi dibuka
     LaunchedEffect(Unit) {
         val info = UpdateChecker.checkForUpdate()
         val currentVersionCode = context.packageManager.getPackageInfo(context.packageName, 0).versionCode
-        
-        // Kalau dapet info versi baru, dan versi server > versi HP, GEMBOK!
         if (info != null && info.latestVersionCode > currentVersionCode) {
             updateInfo = info
         }
@@ -73,12 +71,10 @@ fun AppRoot(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Cont
     }
 
     if (isChecking) {
-        // SPLASH SCREEN (Loading)
         Box(modifier = Modifier.fillMaxSize().background(TelegramDarkBG), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = Color.White)
         }
-        } else if (updateInfo != null) {
-        // LAYAR GEMBOK (Gak bisa di-back, gak bisa ditutup)
+    } else if (updateInfo != null) {
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp).background(TelegramDarkBG),
             verticalArrangement = Arrangement.Center,
@@ -91,7 +87,6 @@ fun AppRoot(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Cont
             Text("Cek link download di bio TikTok atau WhatsApp kami.", color = Color.White, fontSize = 14.sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
         }
     } else {
-        // JALANIN APLIKASI NORMAL (Bisa offline, bisa kirim pesan kalau online)
         NeontApp(fileDb, chatRepo, context)
     }
 }
@@ -109,6 +104,11 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
     var chatMessages by remember { mutableStateOf<List<Message>>(emptyList()) }
     var isUploading by remember { mutableStateOf(false) }
 
+    // State buat VN
+    var isRecording by remember { mutableStateOf(false) }
+    val audioRecorder = remember { AudioRecorder(context) }
+
+    // File Picker (Foto/Video/File)
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null && selectedChatId != null) {
             scope.launch {
@@ -139,11 +139,20 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
         }
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    // Minta Izin Mikrofon
+    val micPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        if (isGranted) {
+            isRecording = true
+            audioRecorder.startRecording()
+        }
+    }
+
+    // Notifikasi Permission
+    val notifPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
     }
@@ -200,6 +209,33 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
             onAttachClick = { option ->
                 if (option == "Gallery") filePicker.launch("image/*")
                 else filePicker.launch("*/*")
+            },
+            onMicClick = {
+                if (isRecording) {
+                    // STOP REKAM
+                    val file = audioRecorder.stopRecording()
+                    isRecording = false
+                    if (file != null && file.exists()) {
+                        scope.launch {
+                            try {
+                                val inputStream = file.inputStream()
+                                val fileUrl = filebase.uploadFile(file.name, "audio/m4a", inputStream)
+                                inputStream.close()
+                                chatRepo.sendMessage(selectedChatId!!, "me", fileUrl, MessageType.VOICE, fileUrl)
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    }
+                } else {
+                    // MULAI REKAM (Cek izin dulu)
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        isRecording = true
+                        audioRecorder.startRecording()
+                    } else {
+                        micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    }
+                }
             }
         )
     }
