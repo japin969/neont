@@ -76,7 +76,7 @@ fun ChatDetailScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        TelegramAvatar(name = chat?.title ?: "Chat", size = 40.dp, isOnline = isContactOnline)
+                        TelegramAvatar(name = chat?.title ?: "Chat", size = 40, isOnline = isContactOnline)
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text(chat?.title ?: "Chat", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
