@@ -50,6 +50,7 @@ fun ChatDetailScreen(
     onTyping: (isTyping: Boolean) -> Unit = {},
     onDeleteMessage: (msg: Message) -> Unit = {},
     onCallClick: () -> Unit = {},
+    onAttachClick: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
@@ -107,7 +108,7 @@ fun ChatDetailScreen(
             onDismiss = { showAttachSheet = false },
             onOptionSelected = { optionName ->
                 showAttachSheet = false
-                onSendMessage("[$optionName attached]")
+                onAttachClick(optionName)
             }
         )
     }

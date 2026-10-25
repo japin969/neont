@@ -22,7 +22,8 @@ class ChatRepository(private val fileDb: FileDatabaseManager) {
         chatId: String,
         senderId: String,
         text: String,
-        type: MessageType = MessageType.TEXT
+        type: MessageType = MessageType.TEXT,
+        mediaUrl: String? = null
     ): Message {
         val msgId = UUID.randomUUID().toString()
         val timestamp = System.currentTimeMillis()
@@ -33,6 +34,7 @@ class ChatRepository(private val fileDb: FileDatabaseManager) {
             senderId = senderId,
             text = text,
             type = type,
+            mediaUrl = mediaUrl,
             status = MessageStatus.PENDING,
             timestamp = timestamp
         )
@@ -44,7 +46,7 @@ class ChatRepository(private val fileDb: FileDatabaseManager) {
         if (index >= 0) {
             chats[index] = chats[index].copy(
                 lastMessage = LastMessageInfo(
-                    text = text,
+                    text = if (type == MessageType.TEXT) text else "[${type.name}]",
                     senderId = senderId,
                     timestamp = timestamp,
                     status = MessageStatus.PENDING,
@@ -60,6 +62,7 @@ class ChatRepository(private val fileDb: FileDatabaseManager) {
             "senderId" to senderId,
             "text" to text,
             "type" to type.name,
+            "mediaUrl" to mediaUrl,
             "timestamp" to ServerValue.TIMESTAMP,
             "status" to MessageStatus.SENT.name
         )
@@ -67,7 +70,7 @@ class ChatRepository(private val fileDb: FileDatabaseManager) {
         val ref = database.getReference("messages").child(chatId).child(msgId)
         ref.setValue(payload)
             .addOnSuccessListener {
-                kotlinx.coroutines.GlobalScope.launch { fileDb.appendMessage(chatId, pendingMessage.copy(status = MessageStatus.SENT)) }
+                fileDb.appendMessage(chatId, pendingMessage.copy(status = MessageStatus.SENT))
             }
 
         return pendingMessage

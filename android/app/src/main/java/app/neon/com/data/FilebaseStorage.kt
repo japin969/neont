@@ -34,6 +34,6 @@ class FilebaseStorage(context: Context) {
             uploadConn.outputStream.use { out -> inputStream.copyTo(out) }
             val code = uploadConn.responseCode
             if (code !in 200..299) throw Exception("Upload gagal, HTTP $code")
-            "https://${json.getString("key")}"
+            "https://s3.filebase.io/${json.getString("key")}"
         }
 }

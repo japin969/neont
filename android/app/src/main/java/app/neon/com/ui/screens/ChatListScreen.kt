@@ -94,7 +94,7 @@ fun ChatListScreen(
                 modifier = Modifier.shadow(4.dp),
                 title = {
                     Text(
-                        text = "Telegram",
+                        text = "L neont",
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 20.sp
