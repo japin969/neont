@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -102,13 +103,52 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
     var selectedChatId by remember { mutableStateOf<String?>(null) }
     var selectedChat by remember { mutableStateOf<Chat?>(null) }
     var chatMessages by remember { mutableStateOf<List<Message>>(emptyList()) }
+    var isContactOnline by remember { mutableStateOf(false) }
     var isUploading by remember { mutableStateOf(false) }
 
-    // State buat VN
     var isRecording by remember { mutableStateOf(false) }
     val audioRecorder = remember { AudioRecorder(context) }
 
-    // File Picker (Foto/Video/File)
+    // Inisialisasi Presence (Online/Offline)
+    LaunchedEffect(Unit) {
+        chatRepo.setupPresence("me")
+        scope.launch {
+            contacts = fileDb.readUsers()
+            currentUser = contacts.firstOrNull { it.uid == "me" }
+            
+            // Realtime List Chat
+            chatRepo.listenToChats().collect { updatedChats ->
+                chats = updatedChats
+            }
+        }
+    }
+
+    // Realtime Messages & Presence
+    LaunchedEffect(selectedChatId) {
+        if (selectedChatId != null) {
+            selectedChat = chats.firstOrNull { it.chatId == selectedChatId }
+            
+            // Dengerin pesan
+            launch {
+                chatRepo.listenToMessages(selectedChatId!!).collect { msgs ->
+                    chatMessages = msgs
+                    if (msgs.isNotEmpty() && msgs.last().senderId != "me") {
+                        NotificationHelper.showNotification(context, selectedChat?.title ?: "New Message", msgs.last().text)
+                    }
+                }
+            }
+            
+            // Dengerin status online lawan chat
+            launch {
+                chatRepo.listenToUserPresence(selectedChat?.chatId ?: "").collect { online ->
+                    isContactOnline = online
+                }
+            }
+        } else {
+            chatMessages = emptyList()
+        }
+    }
+
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null && selectedChatId != null) {
             scope.launch {
@@ -130,16 +170,11 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                         val type = if (mimeType.startsWith("image/")) MessageType.IMAGE else if (mimeType.startsWith("video/")) MessageType.VIDEO else MessageType.FILE
                         chatRepo.sendMessage(selectedChatId!!, "me", fileUrl, type, fileUrl)
                     }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                } finally {
-                    isUploading = false
-                }
+                } catch (e: Exception) { e.printStackTrace() } finally { isUploading = false }
             }
         }
     }
 
-    // Minta Izin Mikrofon
     val micPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         if (isGranted) {
             isRecording = true
@@ -147,7 +182,6 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
         }
     }
 
-    // Notifikasi Permission
     val notifPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -157,27 +191,7 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
         }
     }
 
-    LaunchedEffect(Unit) {
-        scope.launch {
-            chats = fileDb.readChats()
-            contacts = fileDb.readUsers()
-            currentUser = contacts.firstOrNull { it.uid == "me" }
-        }
-    }
-
-    LaunchedEffect(selectedChatId) {
-        if (selectedChatId != null) {
-            selectedChat = chats.firstOrNull { it.chatId == selectedChatId }
-            chatRepo.listenToMessages(selectedChatId!!).collect { msgs ->
-                chatMessages = msgs
-                if (msgs.isNotEmpty() && msgs.last().senderId != "me") {
-                    NotificationHelper.showNotification(context, selectedChat?.title ?: "New Message", msgs.last().text)
-                }
-            }
-        } else {
-            chatMessages = emptyList()
-        }
-    }
+    BackHandler(enabled = selectedChatId != null) { selectedChatId = null }
 
     if (selectedChatId == null) {
         MainScreen(
@@ -196,23 +210,20 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
             chat = selectedChat,
             messages = chatMessages,
             currentUserId = "me",
+            isContactOnline = isContactOnline,
             fileDb = fileDb,
             chatRepo = chatRepo,
             onBackClicked = { selectedChatId = null },
             onSendMessage = { text ->
                 scope.launch {
-                    selectedChatId?.let { chatId ->
-                        chatRepo.sendMessage(chatId, "me", text)
-                    }
+                    selectedChatId?.let { chatId -> chatRepo.sendMessage(chatId, "me", text) }
                 }
             },
             onAttachClick = { option ->
-                if (option == "Gallery") filePicker.launch("image/*")
-                else filePicker.launch("*/*")
+                if (option == "Gallery") filePicker.launch("image/*") else filePicker.launch("*/*")
             },
             onMicClick = {
                 if (isRecording) {
-                    // STOP REKAM
                     val file = audioRecorder.stopRecording()
                     isRecording = false
                     if (file != null && file.exists()) {
@@ -222,13 +233,10 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                                 val fileUrl = filebase.uploadFile(file.name, "audio/m4a", inputStream)
                                 inputStream.close()
                                 chatRepo.sendMessage(selectedChatId!!, "me", fileUrl, MessageType.VOICE, fileUrl)
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
+                            } catch (e: Exception) { e.printStackTrace() }
                         }
                     }
                 } else {
-                    // MULAI REKAM (Cek izin dulu)
                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                         isRecording = true
                         audioRecorder.startRecording()

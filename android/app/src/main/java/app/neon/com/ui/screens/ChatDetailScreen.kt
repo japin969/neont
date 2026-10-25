@@ -1,9 +1,5 @@
-// Neont Messenger - ChatDetailScreen.kt
-// Pixel-Perfect Telegram Android Chat Room
 package app.neon.com.ui.screens
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,25 +7,20 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.neon.com.data.ChatRepository
 import app.neon.com.data.FileDatabaseManager
-import app.neon.com.data.model.Chat
-import app.neon.com.data.model.Message
-import app.neon.com.ui.components.ComposerBar
-import app.neon.com.ui.components.MessageBubble
-import app.neon.com.ui.components.TelegramAvatar
+import app.neon.com.data.model.*
+import app.neon.com.ui.components.*
 import app.neon.com.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -54,58 +45,24 @@ fun ChatDetailScreen(
     onMicClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-
-    val actualChatId = chatId ?: chat?.chatId ?: ""
-    var currentChat by remember { mutableStateOf(chat ?: Chat(chatId = actualChatId, title = "Chat")) }
-
-    // Stream messages if chatRepo is provided and messages list not passed
-    val repoMessages by remember(actualChatId, chatRepo) {
-        chatRepo?.listenToMessages(actualChatId) ?: kotlinx.coroutines.flow.flowOf(emptyList())
-    }.collectAsState(initial = emptyList())
-
-    val displayMessages = messages ?: repoMessages
-    var messageLimit by rememberSaveable { mutableStateOf(30) }
-    val pagedMessages = remember(displayMessages, messageLimit) {
-        if (displayMessages.size > messageLimit) {
-            displayMessages.takeLast(messageLimit)
-        } else {
-            displayMessages
-        }
-    }
-
-    // derivedStateOf: Deteksi posisi scroll agar tidak auto-scroll ke bawah jika pengguna sedang membaca riwayat di atas
-    val isAtBottom by remember {
-        derivedStateOf {
-            val layoutInfo = listState.layoutInfo
-            val totalItems = layoutInfo.totalItemsCount
-            if (totalItems == 0) return@derivedStateOf true
-            val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf true
-            lastVisible.index >= totalItems - 2
-        }
-    }
-
-    LaunchedEffect(actualChatId, fileDb) {
-        if (fileDb != null && chat == null) {
-            val found = fileDb.readChats().find { it.chatId == actualChatId }
-            if (found != null) {
-                currentChat = found
-            }
-        }
-    }
-
-    LaunchedEffect(pagedMessages.size) {
-        if (pagedMessages.isNotEmpty() && isAtBottom) {
-            listState.animateScrollToItem(pagedMessages.size - 1)
-        }
-    }
-
+    val listState = rememberLazyListState()
+    
     var showAttachSheet by remember { mutableStateOf(false) }
     var showEmojiKeyboard by remember { mutableStateOf(false) }
+    var textInput by remember { mutableStateOf("") } // State dikontrol di sini
+
+    val actualChatId = chatId ?: chat?.chatId ?: ""
+    val displayMessages = messages ?: emptyList()
+
+    LaunchedEffect(displayMessages.size) {
+        if (displayMessages.isNotEmpty()) {
+            listState.animateScrollToItem(displayMessages.size - 1)
+        }
+    }
 
     if (showAttachSheet) {
-        app.neon.com.ui.components.AttachBottomSheet(
+        AttachBottomSheet(
             onDismiss = { showAttachSheet = false },
             onOptionSelected = { optionName ->
                 showAttachSheet = false
@@ -117,68 +74,39 @@ fun ChatDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                modifier = Modifier.shadow(4.dp),
-                navigationIcon = {
-                    IconButton(onClick = onBackClicked) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color.White
-                        )
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TelegramAvatar(name = chat?.title ?: "Chat", size = 40.dp, isOnline = isContactOnline)
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(chat?.title ?: "Chat", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            if (isContactTyping) {
+                                Text("typing...", color = TelegramPrimary, fontSize = 13.sp)
+                            } else if (isContactOnline) {
+                                Text("online", color = TelegramPrimary, fontSize = 13.sp)
+                            } else {
+                                Text("last seen recently", color = TelegramTextSecondary, fontSize = 13.sp)
+                            }
+                        }
                     }
                 },
-                title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        // Avatar: 36dp
-                        TelegramAvatar(
-                            name = currentChat.title,
-                            avatarUrl = currentChat.avatarUrl,
-                            size = 36,
-                            isOnline = isContactOnline
-                        )
-
-                        Spacer(Modifier.width(10.dp))
-
-                        Column {
-                            // Nama: 17sp (FontWeight.Medium, Putih)
-                            Text(
-                                text = currentChat.title,
-                                color = Color.White,
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 17.sp,
-                                maxLines = 1
-                            )
-
-                            // Status: "online" (biru #6AB2F2, 13sp) atau "last seen recently" (abu #8B9DAE, 13sp)
-                            val statusText = if (isContactTyping) "typing..." else if (isContactOnline) "online" else "last seen recently"
-                            val statusColor = if (isContactTyping || isContactOnline) TelegramCheckmark else TelegramTextSecondary
-
-                            Text(
-                                text = statusText,
-                                color = statusColor,
-                                fontSize = 13.sp,
-                                maxLines = 1
-                            )
-                        }
+                navigationIcon = {
+                    IconButton(onClick = onBackClicked) {
+                        Icon(Icons.Default.ArrowBack, "Back", tint = Color.White)
                     }
                 },
                 actions = {
                     IconButton(onClick = onCallClick) {
-                        Icon(Icons.Default.Call, contentDescription = "Call", tint = Color.White)
+                        Icon(Icons.Default.Phone, "Call", tint = Color.White)
                     }
                     IconButton(onClick = {}) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More", tint = Color.White)
+                        Icon(Icons.Default.MoreVert, "More", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = TelegramSurface // #17212B
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = TelegramDarkHeader)
             )
         },
-        containerColor = TelegramDarkBG, // Wallpaper: #0F1721
+        containerColor = TelegramDarkBG,
         modifier = modifier
     ) { paddingValues ->
         Column(
@@ -186,56 +114,34 @@ fun ChatDetailScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Main Chat Stream (Background #0F1721) with chunking and animated bubbles
             LazyColumn(
                 state = listState,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .background(TelegramDarkBG), // #0F1721
-                contentPadding = PaddingValues(vertical = 4.dp)
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                if (displayMessages.size > messageLimit) {
-                    item(key = "load_older_messages_btn") {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            TextButton(
-                                onClick = { messageLimit += 30 },
-                                colors = ButtonDefaults.textButtonColors(contentColor = TelegramPrimary)
-                            ) {
-                                Text(
-                                    text = "Load earlier messages (${displayMessages.size - messageLimit} more)",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-                    }
-                }
-
-                items(pagedMessages, key = { it.msgId }) { msg ->
-                    val isOutgoing = msg.senderId == currentUserId || msg.senderId == "me"
+                items(displayMessages, key = { it.msgId }) { msg ->
                     MessageBubble(
                         message = msg,
-                        isOutgoing = isOutgoing,
+                        isOutgoing = msg.senderId == currentUserId,
                         modifier = Modifier.animateItem()
                     )
                 }
             }
 
-            // Composer Bar (Kolom Ketik)
             ComposerBar(
+                text = textInput,
+                onTextChange = { textInput = it },
                 onSendMessage = { text ->
-                    if (onSendMessage != {}) {
-                        onSendMessage(text)
-                    } else if (chatRepo != null && actualChatId.isNotBlank()) {
-                        scope.launch {
-                            chatRepo.sendMessage(actualChatId, currentUserId, text)
+                    if (text.isNotBlank()) {
+                        if (onSendMessage != {}) {
+                            onSendMessage(text)
+                        } else if (chatRepo != null && actualChatId.isNotBlank()) {
+                            scope.launch {
+                                chatRepo.sendMessage(actualChatId, currentUserId, text)
+                            }
                         }
+                        textInput = "" // Reset setelah kirim
+                        showEmojiKeyboard = false
                     }
                 },
                 onTyping = onTyping,
@@ -244,13 +150,14 @@ fun ChatDetailScreen(
                 onEmojiClick = { showEmojiKeyboard = !showEmojiKeyboard }
             )
 
-            // Emoji Keyboard drawer
             if (showEmojiKeyboard) {
-                app.neon.com.ui.components.EmojiKeyboard(
+                EmojiKeyboard(
                     onEmojiSelected = { emoji ->
-                        onSendMessage(emoji)
+                        textInput += emoji // Tambahin ke input, gak langsung kirim
                     },
-                    onBackspaceClick = {}
+                    onBackspaceClick = {
+                        if (textInput.isNotEmpty()) textInput = textInput.dropLast(1)
+                    }
                 )
             }
         }
