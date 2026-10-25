@@ -70,7 +70,7 @@ class ChatRepository(private val fileDb: FileDatabaseManager) {
         val ref = database.getReference("messages").child(chatId).child(msgId)
         ref.setValue(payload)
             .addOnSuccessListener {
-                fileDb.appendMessage(chatId, pendingMessage.copy(status = MessageStatus.SENT))
+                kotlinx.coroutines.GlobalScope.launch { fileDb.appendMessage(chatId, pendingMessage.copy(status = MessageStatus.SENT)) }
             }
 
         return pendingMessage

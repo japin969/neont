@@ -22,7 +22,6 @@ import app.neon.com.data.model.Message
 import app.neon.com.data.model.MessageStatus
 import app.neon.com.data.model.MessageType
 import coil.compose.AsyncImage
-import coil.compose.AsyncVideo
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -67,7 +66,7 @@ fun MessageBubble(
                         )
                     }
                     MessageType.VIDEO -> {
-                        AsyncVideo(
+                        AsyncImage(
                             model = message.mediaUrl ?: message.text,
                             contentDescription = "Video",
                             modifier = Modifier
