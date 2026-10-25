@@ -1,11 +1,12 @@
-// Neont Messenger - SearchScreen.kt
-// Layar Pencarian Global Telegram Android (Chats, Messages, Contacts)
 package com.neont.messenger.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -14,35 +15,54 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.neont.messenger.data.FileDatabaseManager
 import com.neont.messenger.data.model.Chat
 import com.neont.messenger.data.model.User
-import com.neont.messenger.theme.TelegramDarkBackground
-import com.neont.messenger.theme.TelegramDarkDivider
-import com.neont.messenger.theme.TelegramDarkHeader
-import com.neont.messenger.ui.components.TelegramAvatar
+import com.neont.messenger.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
-    chats: List<Chat>,
-    contacts: List<User>,
-    onChatClick: (String) -> Unit,
-    onContactClick: (User) -> Unit,
-    onBackClick: () -> Unit
+    chats: List<Chat>? = null,
+    contacts: List<User>? = null,
+    fileDb: FileDatabaseManager? = null,
+    onChatClick: (String) -> Unit = {},
+    onContactClick: (User) -> Unit = {},
+    onBackClick: () -> Unit = {},
+    modifier: Modifier = Modifier
 ) {
-    var query by remember { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf("") }
+    var localChats by remember { mutableStateOf<List<Chat>>(emptyList()) }
+    var localContacts by remember { mutableStateOf<List<User>>(emptyList()) }
 
-    val matchedChats = remember(chats, query) {
-        if (query.isBlank()) emptyList()
-        else chats.filter { it.title.contains(query, ignoreCase = true) || it.lastMessage?.text?.contains(query, ignoreCase = true) == true }
+    LaunchedEffect(fileDb) {
+        if (chats == null && fileDb != null) {
+            localChats = fileDb.readChats()
+        }
+        if (contacts == null && fileDb != null) {
+            localContacts = fileDb.readUsers()
+        }
     }
 
-    val matchedContacts = remember(contacts, query) {
-        if (query.isBlank()) emptyList()
-        else contacts.filter { it.firstName.contains(query, ignoreCase = true) || it.username.contains(query, ignoreCase = true) }
+    val activeChats = chats ?: localChats
+    val activeContacts = contacts ?: localContacts
+
+    val filteredChats = remember(searchQuery, activeChats) {
+        if (searchQuery.isBlank()) emptyList()
+        else activeChats.filter { it.title.contains(searchQuery, ignoreCase = true) }
+    }
+
+    val filteredContacts = remember(searchQuery, activeContacts) {
+        if (searchQuery.isBlank()) emptyList()
+        else activeContacts.filter {
+            it.firstName.contains(searchQuery, ignoreCase = true) ||
+            it.username.contains(searchQuery, ignoreCase = true)
+        }
     }
 
     Scaffold(
@@ -55,9 +75,10 @@ fun SearchScreen(
                 },
                 title = {
                     TextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        placeholder = { Text("Search chats, messages...", color = Color.Gray) },
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Search", color = TelegramTextSecondary) },
+                        singleLine = true,
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
@@ -66,60 +87,97 @@ fun SearchScreen(
                             focusedIndicatorColor = Color.Transparent,
                             unfocusedIndicatorColor = Color.Transparent
                         ),
-                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                 },
                 actions = {
-                    if (query.isNotEmpty()) {
-                        IconButton(onClick = { query = "" }) {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
                             Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.White)
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = TelegramDarkHeader)
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = TelegramSurface
+                )
             )
         },
-        containerColor = TelegramDarkBackground
-    ) { padding ->
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (matchedChats.isNotEmpty()) {
+        containerColor = TelegramDarkBG,
+        modifier = modifier
+    ) { paddingValues ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            if (filteredChats.isNotEmpty()) {
                 item {
-                    Text("CHATS", color = Color(0xFF5288C1), fontSize = 12.sp, modifier = Modifier.padding(16.dp))
+                    Text(
+                        text = "CHATS",
+                        color = TelegramPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(16.dp, 8.dp)
+                    )
                 }
-                items(matchedChats, key = { it.chatId }) { chat ->
+                items(filteredChats, key = { "chat_${it.chatId}" }) { chat ->
                     Row(
-                        modifier = Modifier.fillMaxWidth().clickable { onChatClick(chat.chatId) }.padding(horizontal = 16.dp, vertical = 10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onChatClick(chat.chatId) }
+                            .padding(16.dp, 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TelegramAvatar(name = chat.title, avatarUrl = chat.avatarUrl, size = 46)
-                        Spacer(Modifier.width(14.dp))
-                        Column {
-                            Text(chat.title, color = Color.White, fontSize = 15.sp)
-                            Text(chat.lastMessage?.text ?: "", color = Color(0xFF7F92A2), fontSize = 13.sp, maxLines = 1)
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(TelegramPrimary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(chat.title.take(1).uppercase(), color = Color.White, fontWeight = FontWeight.Bold)
                         }
+                        Spacer(Modifier.width(12.dp))
+                        Text(chat.title, color = Color.White, fontSize = 16.sp)
                     }
-                    Divider(color = TelegramDarkDivider, thickness = 0.5.dp, modifier = Modifier.padding(start = 76.dp))
+                    Divider(color = TelegramDivider, thickness = 0.5.dp, modifier = Modifier.padding(start = 72.dp))
                 }
             }
 
-            if (matchedContacts.isNotEmpty()) {
+            if (filteredContacts.isNotEmpty()) {
                 item {
-                    Text("CONTACTS", color = Color(0xFF5288C1), fontSize = 12.sp, modifier = Modifier.padding(16.dp))
+                    Text(
+                        text = "CONTACTS",
+                        color = TelegramPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(16.dp, 8.dp)
+                    )
                 }
-                items(matchedContacts, key = { it.uid }) { user ->
+                items(filteredContacts, key = { "contact_${it.uid}" }) { user ->
                     Row(
-                        modifier = Modifier.fillMaxWidth().clickable { onContactClick(user) }.padding(horizontal = 16.dp, vertical = 10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onContactClick(user) }
+                            .padding(16.dp, 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TelegramAvatar(name = user.firstName, avatarUrl = user.avatarUrl, size = 46)
-                        Spacer(Modifier.width(14.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(TelegramPrimary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(user.firstName.take(1).uppercase(), color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(Modifier.width(12.dp))
                         Column {
-                            Text("${user.firstName} ${user.lastName}".trim(), color = Color.White, fontSize = 15.sp)
-                            Text("@${user.username}", color = Color(0xFF7F92A2), fontSize = 13.sp)
+                            Text("${user.firstName} ${user.lastName}".trim(), color = Color.White, fontSize = 16.sp)
+                            Text("@${user.username}", color = TelegramTextSecondary, fontSize = 13.sp)
                         }
                     }
-                    Divider(color = TelegramDarkDivider, thickness = 0.5.dp, modifier = Modifier.padding(start = 76.dp))
+                    Divider(color = TelegramDivider, thickness = 0.5.dp, modifier = Modifier.padding(start = 72.dp))
                 }
             }
         }

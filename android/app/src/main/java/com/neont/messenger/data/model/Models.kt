@@ -11,7 +11,8 @@ data class User(
     val bio: String = "",
     val avatarUrl: String = "",
     val isOnline: Boolean = false,
-    val lastSeenTimestamp: Long = 0L
+    val lastSeenTimestamp: Long = 0L,
+    val lastSeen: Long = lastSeenTimestamp
 )
 
 enum class MessageType {
@@ -47,6 +48,9 @@ data class Message(
     val chatId: String = "",
     val senderId: String = "",
     val text: String = "",
+    val cipherText: String? = null,
+    val iv: String? = null,
+    val encryptedKey: String? = null,
     val type: MessageType = MessageType.TEXT,
     val mediaUrl: String? = null,
     val mediaDurationSec: Int? = null,
@@ -95,7 +99,9 @@ data class PrivacySettings(
     val profilePhotoVisibility: String = "Everybody",
     val callsP2P: String = "Everybody",
     val passcodeLockEnabled: Boolean = false,
-    val twoStepVerificationEnabled: Boolean = true
+    val twoStepVerificationEnabled: Boolean = true,
+    val twoStepPassword: String = "",
+    val autoDeleteTimer: String = "Off" // "Off", "24 Hours", "7 Days", "1 Month"
 )
 
 data class NotificationSettings(

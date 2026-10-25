@@ -1,5 +1,3 @@
-// Neont Messenger - AttachBottomSheet.kt
-// Bottom Sheet Lampiran Telegram: Gallery, File, Location, Poll, Music, Contact
 package com.neont.messenger.ui.components
 
 import androidx.compose.foundation.background
@@ -18,66 +16,69 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.neont.messenger.theme.TelegramDarkHeader
+import com.neont.messenger.ui.theme.TelegramSurface
+
+data class AttachOption(
+    val title: String,
+    val icon: ImageVector,
+    val color: Color
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AttachBottomSheet(
     onDismiss: () -> Unit,
-    onOptionSelected: (type: String) -> Unit
+    onOptionSelected: (String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    val options = listOf(
+        AttachOption("Gallery", Icons.Default.Image, Color(0xFF3B82F6)),
+        AttachOption("File", Icons.Default.InsertDriveFile, Color(0xFFF59E0B)),
+        AttachOption("Location", Icons.Default.LocationOn, Color(0xFF10B981)),
+        AttachOption("Poll", Icons.Default.Poll, Color(0xFF8B5CF6)),
+        AttachOption("Music", Icons.Default.MusicNote, Color(0xFFEC4899)),
+        AttachOption("Contact", Icons.Default.Person, Color(0xFF06B6D4))
+    )
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = TelegramDarkHeader,
-        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+        containerColor = TelegramSurface,
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        modifier = modifier
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 32.dp, top = 8.dp, start = 16.dp, end = 16.dp)
+                .padding(horizontal = 16.dp, vertical = 20.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
-                AttachOptionItem(icon = Icons.Default.Image, label = "Gallery", color = Color(0xFF29B6F6)) {
-                    onOptionSelected("gallery")
-                }
-                AttachOptionItem(icon = Icons.Default.InsertDriveFile, label = "File", color = Color(0xFF26A69A)) {
-                    onOptionSelected("file")
-                }
-                AttachOptionItem(icon = Icons.Default.Place, label = "Location", color = Color(0xFFFF7043)) {
-                    onOptionSelected("location")
-                }
-                AttachOptionItem(icon = Icons.Default.Poll, label = "Poll", color = Color(0xFFAB47BC)) {
-                    onOptionSelected("poll")
+                options.take(3).forEach { option ->
+                    AttachItem(option = option, onClick = { onOptionSelected(option.title) })
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(20.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Start
+                horizontalArrangement = Arrangement.SpaceAround
             ) {
-                Spacer(Modifier.width(20.dp))
-                AttachOptionItem(icon = Icons.Default.MusicNote, label = "Music", color = Color(0xFFEC407A)) {
-                    onOptionSelected("music")
-                }
-                Spacer(Modifier.width(48.dp))
-                AttachOptionItem(icon = Icons.Default.Person, label = "Contact", color = Color(0xFF5C6BC0)) {
-                    onOptionSelected("contact")
+                options.drop(3).forEach { option ->
+                    AttachItem(option = option, onClick = { onOptionSelected(option.title) })
                 }
             }
+
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
 
 @Composable
-private fun AttachOptionItem(
-    icon: ImageVector,
-    label: String,
-    color: Color,
+private fun AttachItem(
+    option: AttachOption,
     onClick: () -> Unit
 ) {
     Column(
@@ -86,19 +87,23 @@ private fun AttachOptionItem(
     ) {
         Box(
             modifier = Modifier
-                .size(56.dp)
+                .size(54.dp)
                 .clip(CircleShape)
-                .background(color),
+                .background(option.color),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = icon,
-                contentDescription = label,
+                imageVector = option.icon,
+                contentDescription = option.title,
                 tint = Color.White,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(26.dp)
             )
         }
-        Spacer(Modifier.height(8.dp))
-        Text(text = label, color = Color.White, fontSize = 12.sp)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = option.title,
+            color = Color.White,
+            fontSize = 12.sp
+        )
     }
 }

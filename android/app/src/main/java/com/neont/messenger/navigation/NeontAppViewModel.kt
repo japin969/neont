@@ -209,66 +209,57 @@ class NeontAppViewModel @Inject constructor(
     }
 
     // ========================================================
-    // AUTHENTICATION & PROFILE
+    // AUTHENTICATION & PROFILE (100% EMAIL & PASSWORD)
     // ========================================================
-    fun login(email: String, pass: String, onSuccess: () -> Unit) {
+    fun signInWithEmail(email: String, pass: String, onResult: (User) -> Unit) {
         viewModelScope.launch {
             isAuthLoading = true
             authError = null
-            authRepo.loginUser(email, pass)
-                .onSuccess { firebaseUser ->
+            when (val res = authRepo.signInWithEmail(email, pass)) {
+                is AuthResult.Success -> {
                     isAuthLoading = false
-                    val u = User(
-                        uid = firebaseUser.uid,
-                        firstName = firebaseUser.displayName?.split(" ")?.firstOrNull() ?: "User",
-                        lastName = firebaseUser.displayName?.split(" ")?.drop(1)?.joinToString(" ") ?: "",
-                        username = email.substringBefore("@"),
-                        phoneNumber = "",
-                        isOnline = true
-                    )
-                    fileDb.upsertUser(u)
-                    _currentUser.value = u
-                    chatRepo.setupPresence(firebaseUser.uid)
-                    onSuccess()
+                    _currentUser.value = res.data
+                    chatRepo.setupPresence(res.data.uid)
+                    onResult(res.data)
                 }
-                .onFailure {
+                is AuthResult.Error -> {
                     isAuthLoading = false
-                    authError = it.localizedMessage ?: "Login failed"
+                    authError = res.message
                 }
+            }
         }
     }
 
-    fun register(email: String, pass: String, name: String, username: String, onSuccess: () -> Unit) {
+    fun createUserWithEmail(email: String, pass: String, onResult: (User) -> Unit) {
         viewModelScope.launch {
             isAuthLoading = true
             authError = null
-            authRepo.registerUser(email, pass, name, username)
-                .onSuccess { firebaseUser ->
+            when (val res = authRepo.createUserWithEmail(email, pass)) {
+                is AuthResult.Success -> {
                     isAuthLoading = false
-                    val parts = name.split(" ")
-                    val u = User(
-                        uid = firebaseUser.uid,
-                        firstName = parts.firstOrNull() ?: name,
-                        lastName = parts.drop(1).joinToString(" "),
-                        username = username,
-                        phoneNumber = "",
-                        isOnline = true
-                    )
-                    fileDb.upsertUser(u)
-                    _currentUser.value = u
-                    chatRepo.setupPresence(firebaseUser.uid)
-                    onSuccess()
+                    _currentUser.value = res.data
+                    chatRepo.setupPresence(res.data.uid)
+                    onResult(res.data)
                 }
-                .onFailure {
+                is AuthResult.Error -> {
                     isAuthLoading = false
-                    authError = it.localizedMessage ?: "Registration failed"
+                    authError = res.message
                 }
+            }
         }
+    }
+
+    fun login(email: String, pass: String, onSuccess: () -> Unit) {
+        signInWithEmail(email, pass) { onSuccess() }
+    }
+
+    fun register(email: String, pass: String, name: String, username: String, onSuccess: () -> Unit) {
+        createUserWithEmail(email, pass) { onSuccess() }
     }
 
     fun logout(onSuccess: () -> Unit) {
         viewModelScope.launch {
-            authRepo.logoutUser()
+            authRepo.logout()
             _currentUser.value = null
             onSuccess()
         }

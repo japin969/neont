@@ -1,8 +1,10 @@
 // Neont Messenger - AuthRepository.kt
-// Mengatur autentikasi Firebase + sinkronisasi profil user ke Realtime Database dan users.json
+// Mengatur autentikasi Firebase Email & Password + sinkronisasi profil user ke Realtime Database dan users.json
 package com.neont.messenger.data.repository
 
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.database.FirebaseDatabase
 import com.neont.messenger.data.file.FileDatabaseManager
@@ -41,21 +43,23 @@ class AuthRepository @Inject constructor(
         awaitClose { auth.removeAuthStateListener(listener) }
     }
 
-    suspend fun register(
+    /**
+     * Mendaftar akun baru dengan Email & Password
+     * Menyimpan data dasar ke /users/{uid} dengan field email, firstName kosong, isOnline = true
+     */
+    suspend fun createUserWithEmail(
         email: String,
-        pass: String,
-        displayName: String,
-        username: String
+        pass: String
     ): AuthResult<User> = withContext(Dispatchers.IO) {
         try {
-            val result = auth.createUserWithEmailAndPassword(email, pass).await()
+            val result = auth.createUserWithEmailAndPassword(email.trim(), pass.trim()).await()
             val firebaseUser = result.user ?: throw IllegalStateException("Pendaftaran gagal")
 
             val newUser = User(
                 uid = firebaseUser.uid,
-                phoneNumber = email,
-                username = username.replace("@", ""),
-                firstName = displayName,
+                phoneNumber = "",
+                username = email.substringBefore("@"),
+                firstName = "", // Dikosongkan agar diarahkan ke profile_setup
                 lastName = "",
                 bio = "Hey there! I am using Neont.",
                 avatarUrl = "",
@@ -66,34 +70,73 @@ class AuthRepository @Inject constructor(
             // 1. Simpan ke internal storage users.json
             fileDb.upsertUser(newUser)
 
-            // 2. Simpan ke Firebase Realtime Database
+            // 2. Simpan ke Firebase Realtime Database di /users/{uid}
             database.getReference("users").child(newUser.uid).setValue(newUser).await()
 
             AuthResult.Success(newUser)
+        } catch (e: FirebaseAuthUserCollisionException) {
+            AuthResult.Error("Email ini sudah terdaftar. Silakan login.")
+        } catch (e: FirebaseAuthInvalidCredentialsException) {
+            AuthResult.Error("Format email tidak valid atau password terlalu lemah (min. 6 karakter).")
         } catch (e: Exception) {
-            AuthResult.Error(e.localizedMessage ?: "Pendaftaran gagal")
+            AuthResult.Error(e.localizedMessage ?: "Pendaftaran gagal. Periksa koneksi internet.")
         }
     }
 
-    suspend fun login(email: String, pass: String): AuthResult<User> = withContext(Dispatchers.IO) {
+    /**
+     * Masuk dengan Email & Password
+     * Mengambil profil dari Firebase Realtime Database atau local cache
+     */
+    suspend fun signInWithEmail(
+        email: String,
+        pass: String
+    ): AuthResult<User> = withContext(Dispatchers.IO) {
         try {
-            val result = auth.signInWithEmailAndPassword(email, pass).await()
+            val result = auth.signInWithEmailAndPassword(email.trim(), pass.trim()).await()
             val firebaseUser = result.user ?: throw IllegalStateException("Login gagal")
 
-            // Ambil profil dari Firebase atau local cache
-            val snapshot = database.getReference("users").child(firebaseUser.uid).get().await()
-            val user = snapshot.getValue(User::class.java) ?: User(
-                uid = firebaseUser.uid,
-                phoneNumber = email,
-                username = email.substringBefore("@"),
-                firstName = email.substringBefore("@"),
-                isOnline = true
-            )
+            // Ambil profil dari Firebase Realtime Database
+            var user: User? = null
+            try {
+                val snapshot = database.getReference("users").child(firebaseUser.uid).get().await()
+                user = snapshot.getValue(User::class.java)
+            } catch (_: Exception) {}
 
-            fileDb.upsertUser(user)
-            AuthResult.Success(user)
+            if (user == null) {
+                user = fileDb.readUsers().find { it.uid == firebaseUser.uid } ?: User(
+                    uid = firebaseUser.uid,
+                    phoneNumber = "",
+                    username = email.substringBefore("@"),
+                    firstName = "",
+                    isOnline = true,
+                    lastSeen = System.currentTimeMillis()
+                )
+            }
+
+            // Update status online
+            val activeUser = user.copy(isOnline = true)
+            fileDb.upsertUser(activeUser)
+            database.getReference("users").child(activeUser.uid).child("isOnline").setValue(true).await()
+
+            AuthResult.Success(activeUser)
+        } catch (e: FirebaseAuthInvalidCredentialsException) {
+            AuthResult.Error("Email atau Password salah.")
         } catch (e: Exception) {
-            AuthResult.Error(e.localizedMessage ?: "Email atau password salah")
+            AuthResult.Error(e.localizedMessage ?: "Email atau Password salah.")
+        }
+    }
+
+    // Backward-compatible methods
+    suspend fun login(email: String, pass: String): AuthResult<User> = signInWithEmail(email, pass)
+    suspend fun register(email: String, pass: String, displayName: String, username: String): AuthResult<User> {
+        return when (val res = createUserWithEmail(email, pass)) {
+            is AuthResult.Success -> {
+                val updated = res.data.copy(firstName = displayName, username = username)
+                fileDb.upsertUser(updated)
+                database.getReference("users").child(updated.uid).setValue(updated).await()
+                AuthResult.Success(updated)
+            }
+            is AuthResult.Error -> res
         }
     }
 

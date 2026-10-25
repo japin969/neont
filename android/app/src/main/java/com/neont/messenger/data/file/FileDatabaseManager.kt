@@ -6,6 +6,7 @@ package com.neont.messenger.data.file
 import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.neont.messenger.data.crypto.RealMessageCrypto
 import com.neont.messenger.data.model.*
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -142,47 +143,84 @@ class FileDatabaseManager @Inject constructor(
     }
 
     // ========================================================
-    // MESSAGES (messages_{chatId}.json)
+    // MESSAGES (messages_{chatId}.json) - E2EE ON-DISK STORAGE
     // ========================================================
     suspend fun readMessages(chatId: String): List<Message> = withContext(Dispatchers.IO) {
         val fileName = "messages_${chatId}.json"
         val file = File(dbDir, fileName)
-        mutexFor(fileName).withLock {
+        val encryptedList: List<Message> = mutexFor(fileName).withLock {
             readJson(file, object : TypeToken<List<Message>>() {}) ?: emptyList()
+        }
+        // Dekripsi in-memory saat dibaca untuk UI
+        encryptedList.map { msg ->
+            if (!msg.cipherText.isNullOrBlank() && !msg.iv.isNullOrBlank()) {
+                val plain = RealMessageCrypto.decrypt(msg.cipherText, msg.iv, chatId, msg.text)
+                msg.copy(text = plain)
+            } else {
+                msg
+            }
         }
     }
 
     suspend fun writeMessages(chatId: String, messages: List<Message>) = withContext(Dispatchers.IO) {
         val fileName = "messages_${chatId}.json"
         val file = File(dbDir, fileName)
+        val encryptedMessages = messages.map { msg ->
+            if (msg.cipherText.isNullOrBlank() && msg.text.isNotBlank()) {
+                val encrypted = RealMessageCrypto.encrypt(msg.text, chatId)
+                msg.copy(text = "", cipherText = encrypted.cipherText, iv = encrypted.iv, encryptedKey = encrypted.encryptedKey)
+            } else {
+                msg
+            }
+        }
         mutexFor(fileName).withLock {
-            writeJson(file, messages)
+            writeJson(file, encryptedMessages)
         }
     }
 
     suspend fun appendMessage(chatId: String, message: Message): List<Message> = withContext(Dispatchers.IO) {
         val fileName = "messages_${chatId}.json"
         val file = File(dbDir, fileName)
+
+        // Simpan ke disk dalam bentuk terenkripsi (CipherText & IV)
+        val diskMsg = if (message.cipherText.isNullOrBlank() && message.text.isNotBlank()) {
+            val encrypted = RealMessageCrypto.encrypt(message.text, chatId)
+            message.copy(text = "", cipherText = encrypted.cipherText, iv = encrypted.iv, encryptedKey = encrypted.encryptedKey)
+        } else {
+            message
+        }
+
         mutexFor(fileName).withLock {
             val current = (readJson<List<Message>>(file, object : TypeToken<List<Message>>() {}) ?: emptyList()).toMutableList()
-            val existingIndex = current.indexOfFirst { it.msgId == message.msgId }
+            val existingIndex = current.indexOfFirst { it.msgId == diskMsg.msgId }
             if (existingIndex >= 0) {
-                current[existingIndex] = message
+                current[existingIndex] = diskMsg
             } else {
-                current.add(message)
+                current.add(diskMsg)
             }
             writeJson(file, current)
-            current
+
+            // Kembalikan in-memory list terdekripsi untuk UI
+            current.map { msg ->
+                if (!msg.cipherText.isNullOrBlank() && !msg.iv.isNullOrBlank()) {
+                    msg.copy(text = RealMessageCrypto.decrypt(msg.cipherText, msg.iv, chatId, msg.text))
+                } else msg
+            }
         }
     }
 
     suspend fun deleteMessage(chatId: String, msgId: String): List<Message> = withContext(Dispatchers.IO) {
         val fileName = "messages_${chatId}.json"
         val file = File(dbDir, fileName)
-        mutexFor(fileName).withLock {
+        val updated = mutexFor(fileName).withLock {
             val current = (readJson<List<Message>>(file, object : TypeToken<List<Message>>() {}) ?: emptyList()).filterNot { it.msgId == msgId }
             writeJson(file, current)
             current
+        }
+        updated.map { msg ->
+            if (!msg.cipherText.isNullOrBlank() && !msg.iv.isNullOrBlank()) {
+                msg.copy(text = RealMessageCrypto.decrypt(msg.cipherText, msg.iv, chatId, msg.text))
+            } else msg
         }
     }
 

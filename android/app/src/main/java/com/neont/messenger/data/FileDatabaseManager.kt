@@ -3,6 +3,7 @@ package com.neont.messenger.data
 import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.neont.messenger.data.crypto.RealMessageCrypto
 import com.neont.messenger.data.model.Chat
 import com.neont.messenger.data.model.LastMessageInfo
 import com.neont.messenger.data.model.Message
@@ -61,7 +62,7 @@ class FileDatabaseManager(private val context: Context) {
     suspend fun readMessages(chatId: String): List<Message> = withContext(Dispatchers.IO) {
         val filename = "messages_${chatId}.json"
         val file = File(dbDir, filename)
-        getMutex(filename).withLock {
+        val encryptedList: List<Message> = getMutex(filename).withLock {
             if (!file.exists()) return@withContext emptyList()
             try {
                 FileReader(file).use { reader ->
@@ -72,11 +73,25 @@ class FileDatabaseManager(private val context: Context) {
                 emptyList()
             }
         }
+        // In-memory decryption
+        encryptedList.map { msg ->
+            if (!msg.cipherText.isNullOrBlank() && !msg.iv.isNullOrBlank()) {
+                val plain = RealMessageCrypto.decrypt(msg.cipherText, msg.iv, chatId, msg.text)
+                msg.copy(text = plain)
+            } else msg
+        }
     }
 
     suspend fun appendMessage(chatId: String, message: Message): List<Message> = withContext(Dispatchers.IO) {
         val filename = "messages_${chatId}.json"
         val file = File(dbDir, filename)
+
+        // Enkripsi sebelum disimpan ke file JSON lokal
+        val diskMsg = if (message.cipherText.isNullOrBlank() && message.text.isNotBlank()) {
+            val encrypted = RealMessageCrypto.encrypt(message.text, chatId)
+            message.copy(text = "", cipherText = encrypted.cipherText, iv = encrypted.iv, encryptedKey = encrypted.encryptedKey)
+        } else message
+
         getMutex(filename).withLock {
             val currentList = if (file.exists()) {
                 try {
@@ -91,15 +106,21 @@ class FileDatabaseManager(private val context: Context) {
                 mutableListOf()
             }
 
-            val existingIndex = currentList.indexOfFirst { it.msgId == message.msgId }
+            val existingIndex = currentList.indexOfFirst { it.msgId == diskMsg.msgId }
             if (existingIndex >= 0) {
-                currentList[existingIndex] = message
+                currentList[existingIndex] = diskMsg
             } else {
-                currentList.add(message)
+                currentList.add(diskMsg)
             }
 
             atomicWrite(file, currentList)
-            currentList
+
+            // Return in-memory decrypted messages for UI
+            currentList.map { msg ->
+                if (!msg.cipherText.isNullOrBlank() && !msg.iv.isNullOrBlank()) {
+                    msg.copy(text = RealMessageCrypto.decrypt(msg.cipherText, msg.iv, chatId, msg.text))
+                } else msg
+            }
         }
     }
 

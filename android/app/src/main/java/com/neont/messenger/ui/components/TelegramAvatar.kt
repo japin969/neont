@@ -18,7 +18,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import com.neont.messenger.theme.AvatarGradients
 import com.neont.messenger.theme.OnlineGreen
 import kotlin.math.abs
@@ -31,6 +34,7 @@ fun TelegramAvatar(
     isOnline: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val initials = remember(name) {
         val parts = name.trim().split(" ")
         if (parts.size >= 2) {
@@ -45,13 +49,24 @@ fun TelegramAvatar(
         AvatarGradients[index]
     }
 
+    val imageRequest = remember(avatarUrl) {
+        if (!avatarUrl.isNullOrBlank()) {
+            ImageRequest.Builder(context)
+                .data(avatarUrl)
+                .crossfade(true)
+                .memoryCachePolicy(CachePolicy.ENABLED)
+                .diskCachePolicy(CachePolicy.ENABLED)
+                .build()
+        } else null
+    }
+
     Box(
         modifier = modifier.size(size.dp),
         contentAlignment = Alignment.Center
     ) {
-        if (!avatarUrl.isNullOrBlank()) {
+        if (imageRequest != null) {
             AsyncImage(
-                model = avatarUrl,
+                model = imageRequest,
                 contentDescription = name,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier

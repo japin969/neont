@@ -1,7 +1,6 @@
-// Neont Messenger - StoryBar
-// Deretan Stories Telegram Android di atas Chat List dengan ring gradien biru
 package com.neont.messenger.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,11 +16,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.neont.messenger.data.model.Story
-import com.neont.messenger.theme.TelegramLightBlue
+import com.neont.messenger.ui.theme.TelegramDarkBG
+import com.neont.messenger.ui.theme.TelegramPrimary
 
 @Composable
 fun StoryBar(
@@ -33,67 +34,55 @@ fun StoryBar(
     LazyRow(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        contentPadding = PaddingValues(horizontal = 12.dp),
+            .background(TelegramDarkBG)
+            .padding(vertical = 10.dp, horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Item: Add My Story
+        // Tombol "+ My Story"
         item {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .width(62.dp)
-                    .clickable { onAddStoryClick() }
+                modifier = Modifier.clickable { onAddStoryClick() }
             ) {
-                Box(contentAlignment = Alignment.BottomEnd) {
-                    TelegramAvatar(
-                        name = "My Story",
-                        size = 54
-                    )
+                Box(
+                    modifier = Modifier
+                        .size(58.dp)
+                        .clip(CircleShape)
+                        .border(2.dp, TelegramPrimary, CircleShape)
+                        .padding(3.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(18.dp)
+                            .fillMaxSize()
                             .clip(CircleShape)
-                            .border(2.dp, Color(0xFF17212B), CircleShape),
+                            .background(Color(0xFF242F3D)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(CircleShape)
-                                .border(0.dp, Color.Transparent, CircleShape)
-                        )
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = "Add story",
-                            tint = Color.White,
-                            modifier = Modifier
-                                .size(18.dp)
-                                .clip(CircleShape)
-                                .border(1.dp, TelegramLightBlue, CircleShape)
+                            contentDescription = "Add Story",
+                            tint = TelegramPrimary,
+                            modifier = Modifier.size(26.dp)
                         )
                     }
                 }
-
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = "My Story",
-                    color = Color.LightGray,
+                    color = Color.White,
                     fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 1
                 )
             }
         }
 
-        // Daftar Stories Kontak
+        // Daftar Story Pengguna dengan Ring Biru
         items(stories, key = { it.storyId }) { story ->
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .width(62.dp)
-                    .clickable { onStoryClick(story) }
+                modifier = Modifier.clickable { onStoryClick(story) }
             ) {
                 Box(
                     modifier = Modifier
@@ -101,26 +90,35 @@ fun StoryBar(
                         .clip(CircleShape)
                         .border(
                             width = 2.dp,
-                            color = if (story.isViewed) Color.DarkGray else TelegramLightBlue,
+                            color = if (story.isViewed) Color(0xFF4E5C6A) else TelegramPrimary,
                             shape = CircleShape
                         )
-                        .padding(2.dp),
+                        .padding(3.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    TelegramAvatar(
-                        name = story.userName,
-                        avatarUrl = story.userAvatar,
-                        size = 52
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .background(TelegramPrimary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = story.userName.take(1).uppercase(),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+                    }
                 }
-
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = story.userName.split(" ").firstOrNull() ?: story.userName,
+                    text = story.userName.split(" ").firstOrNull() ?: "",
                     color = Color.White,
                     fontSize = 11.sp,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 64.dp)
                 )
             }
         }

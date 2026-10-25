@@ -25,12 +25,7 @@ import com.neont.messenger.theme.BadgeUnread
 import com.neont.messenger.theme.TelegramDarkHeader
 import com.neont.messenger.theme.TelegramLightBlue
 
-enum class MainTab(val label: String, val icon: ImageVector) {
-    CONTACTS("Contacts", Icons.Default.Person),
-    CALLS("Calls", Icons.Default.Call),
-    CHATS("Chats", Icons.Default.Chat),
-    SETTINGS("Settings", Icons.Default.Settings)
-}
+val MainTab.label: String get() = this.title
 
 @Composable
 fun NeontBottomNav(

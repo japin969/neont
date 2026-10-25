@@ -67,6 +67,7 @@ class AuthRepo @Inject constructor(
             bio = "Hey there! I am using Neont.",
             avatarUrl = "",
             isOnline = true,
+            lastSeenTimestamp = System.currentTimeMillis(),
             lastSeen = System.currentTimeMillis()
         )
         // Store locally in users.json immediately

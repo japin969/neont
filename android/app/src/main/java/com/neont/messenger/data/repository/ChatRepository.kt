@@ -3,12 +3,14 @@
 package com.neont.messenger.data.repository
 
 import com.google.firebase.database.*
+import com.neont.messenger.data.crypto.RealMessageCrypto
 import com.neont.messenger.data.file.FileDatabaseManager
 import com.neont.messenger.data.model.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -22,6 +24,7 @@ class ChatRepository @Inject constructor(
     private val fileDb: FileDatabaseManager
 ) {
     private val repositoryScope = CoroutineScope(Dispatchers.IO)
+    private val chatMessageFlows = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.flow.MutableStateFlow<List<Message>>>()
 
     init {
         try {
@@ -48,7 +51,8 @@ class ChatRepository @Inject constructor(
     suspend fun getLocalMessages(chatId: String): List<Message> = fileDb.readMessages(chatId)
 
     /**
-     * Mengirim pesan dengan optimistic local store + Firebase Realtime Database
+     * Mengirim pesan dengan Real End-to-End Encryption (AES-256-GCM + IV)
+     * Plaintext didekripsi hanya di memori, disimpan dalam bentuk CipherText di Firebase & berkas lokal
      */
     suspend fun sendMessage(
         chatId: String,
@@ -61,11 +65,17 @@ class ChatRepository @Inject constructor(
         val msgId = UUID.randomUUID().toString()
         val timestamp = System.currentTimeMillis()
 
+        // Enkripsi E2EE AES-256-GCM
+        val encrypted = RealMessageCrypto.encrypt(text, chatId)
+
         val pendingMessage = Message(
             msgId = msgId,
             chatId = chatId,
             senderId = senderId,
-            text = text,
+            text = text, // In-memory plaintext untuk rendering instan
+            cipherText = encrypted.cipherText,
+            iv = encrypted.iv,
+            encryptedKey = encrypted.encryptedKey,
             type = type,
             mediaUrl = mediaUrl,
             mediaDurationSec = mediaDurationSec,
@@ -73,8 +83,17 @@ class ChatRepository @Inject constructor(
             timestamp = timestamp
         )
 
-        // 1. Simpan ke file JSON lokal (messages_{chatId}.json) secara instan
-        fileDb.appendMessage(chatId, pendingMessage)
+        // Update in-memory state flow secara instan (zero lag)
+        chatMessageFlows[chatId]?.let { flow ->
+            val updated = flow.value.toMutableList()
+            updated.add(pendingMessage)
+            flow.value = updated
+        }
+
+        // 1. Simpan ke berkas JSON lokal (tersimpan terenkripsi di disk) pada Dispatchers.IO
+        repositoryScope.launch(Dispatchers.IO) {
+            fileDb.appendMessage(chatId, pendingMessage)
+        }
 
         // 2. Update preview di chats.json
         val lastMsg = LastMessageInfo(
@@ -91,24 +110,40 @@ class ChatRepository @Inject constructor(
             fileDb.writeChats(chats)
         }
 
-        // 3. Push ke Firebase /messages/{chatId}/{msgId}
-        val payload = mapOf(
+        // 3. Push CipherText dan IV ke Firebase Realtime Database
+        val payload = mutableMapOf<String, Any>(
             "msgId" to msgId,
             "chatId" to chatId,
             "senderId" to senderId,
-            "text" to text,
+            "cipherText" to encrypted.cipherText,
+            "iv" to encrypted.iv,
+            "text" to "[E2EE Encrypted]", // Tidak pernah mengekspos plaintext di jaringan
             "type" to type.name,
-            "mediaUrl" to mediaUrl,
-            "mediaDurationSec" to mediaDurationSec,
             "timestamp" to ServerValue.TIMESTAMP,
             "status" to MessageStatus.SENT.name
         )
+        if (encrypted.encryptedKey != null) {
+            payload["encryptedKey"] = encrypted.encryptedKey
+        }
+        if (mediaUrl != null) payload["mediaUrl"] = mediaUrl
+        if (mediaDurationSec != null) payload["mediaDurationSec"] = mediaDurationSec
 
         val msgRef = database.getReference("messages").child(chatId).child(msgId)
         msgRef.setValue(payload)
             .addOnSuccessListener {
-                repositoryScope.launch {
+                repositoryScope.launch(Dispatchers.IO) {
                     fileDb.updateMessageStatus(chatId, msgId, MessageStatus.SENT)
+
+                    // Update item yang berubah di state flow
+                    chatMessageFlows[chatId]?.let { flow ->
+                        val current = flow.value.toMutableList()
+                        val mIdx = current.indexOfFirst { it.msgId == msgId }
+                        if (mIdx >= 0) {
+                            current[mIdx] = current[mIdx].copy(status = MessageStatus.SENT)
+                            flow.value = current
+                        }
+                    }
+
                     val updatedChats = fileDb.readChats().toMutableList()
                     val idx = updatedChats.indexOfFirst { it.chatId == chatId }
                     if (idx >= 0) {
@@ -119,44 +154,79 @@ class ChatRepository @Inject constructor(
                     }
                 }
             }
-            .addOnFailureListener {
-                // Biarkan status tetap PENDING di JSON untuk dikirim saat online
-            }
 
         return pendingMessage
     }
 
     /**
-     * Listener pesan masuk real-time: addChildEventListener -> simpan ke file JSON lokal -> emit ke Flow
+     * Listener pesan masuk real-time: menggunakan MutableStateFlow dan hanya mengupdate item yang berubah
      */
-    fun listenToMessages(chatId: String): Flow<List<Message>> = callbackFlow {
-        // Emit data cache lokal terlebih dahulu
-        trySend(fileDb.readMessages(chatId))
+    fun listenToMessages(chatId: String): Flow<List<Message>> {
+        val stateFlow = chatMessageFlows.getOrPut(chatId) {
+            val initial = kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+                fileDb.readMessages(chatId)
+            }
+            kotlinx.coroutines.flow.MutableStateFlow(initial)
+        }
 
         val ref = database.getReference("messages").child(chatId)
         val listener = object : ChildEventListener {
             override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
-                val msg = snapshot.getValue(Message::class.java) ?: return
-                repositoryScope.launch {
-                    val status = if (msg.status == MessageStatus.PENDING) MessageStatus.DELIVERED else msg.status
-                    fileDb.appendMessage(chatId, msg.copy(status = status))
-                    trySend(fileDb.readMessages(chatId))
+                val rawMsg = snapshot.getValue(Message::class.java) ?: return
+                repositoryScope.launch(Dispatchers.IO) {
+                    val status = if (rawMsg.status == MessageStatus.PENDING) MessageStatus.DELIVERED else rawMsg.status
+                    // Dekripsi teks secara in-memory
+                    val decryptedText = if (!rawMsg.cipherText.isNullOrBlank() && !rawMsg.iv.isNullOrBlank()) {
+                        RealMessageCrypto.decrypt(rawMsg.cipherText, rawMsg.iv, chatId, rawMsg.text)
+                    } else {
+                        rawMsg.text
+                    }
+                    val memoryMsg = rawMsg.copy(text = decryptedText, status = status)
+
+                    // Update HANYA item yang berubah pada MutableStateFlow
+                    val current = stateFlow.value.toMutableList()
+                    val existingIdx = current.indexOfFirst { it.msgId == memoryMsg.msgId }
+                    if (existingIdx >= 0) {
+                        current[existingIdx] = memoryMsg
+                    } else {
+                        current.add(memoryMsg)
+                    }
+                    stateFlow.value = current
+
+                    // Simpan ke disk (Dispatchers.IO)
+                    fileDb.appendMessage(chatId, rawMsg.copy(status = status))
                 }
             }
 
             override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) {
-                val msg = snapshot.getValue(Message::class.java) ?: return
-                repositoryScope.launch {
-                    fileDb.appendMessage(chatId, msg)
-                    trySend(fileDb.readMessages(chatId))
+                val rawMsg = snapshot.getValue(Message::class.java) ?: return
+                repositoryScope.launch(Dispatchers.IO) {
+                    val decryptedText = if (!rawMsg.cipherText.isNullOrBlank() && !rawMsg.iv.isNullOrBlank()) {
+                        RealMessageCrypto.decrypt(rawMsg.cipherText, rawMsg.iv, chatId, rawMsg.text)
+                    } else {
+                        rawMsg.text
+                    }
+                    val memoryMsg = rawMsg.copy(text = decryptedText)
+
+                    val current = stateFlow.value.toMutableList()
+                    val idx = current.indexOfFirst { it.msgId == memoryMsg.msgId }
+                    if (idx >= 0) {
+                        current[idx] = memoryMsg
+                        stateFlow.value = current
+                    }
+
+                    fileDb.appendMessage(chatId, rawMsg)
                 }
             }
 
             override fun onChildRemoved(snapshot: DataSnapshot) {
                 val msgId = snapshot.key ?: return
-                repositoryScope.launch {
+                repositoryScope.launch(Dispatchers.IO) {
+                    val current = stateFlow.value.toMutableList()
+                    if (current.removeAll { it.msgId == msgId }) {
+                        stateFlow.value = current
+                    }
                     fileDb.deleteMessage(chatId, msgId)
-                    trySend(fileDb.readMessages(chatId))
                 }
             }
 
@@ -165,7 +235,7 @@ class ChatRepository @Inject constructor(
         }
 
         ref.addChildEventListener(listener)
-        awaitClose { ref.removeEventListener(listener) }
+        return stateFlow.asStateFlow()
     }
 
     /**

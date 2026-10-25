@@ -1,169 +1,230 @@
-// Neont Messenger - AuthScreen
-// Autentikasi Pengguna: Login & Registrasi Akun Firebase dengan penyimpanan profil ke users.json
+// Neont Messenger - AuthScreen.kt
+// Pixel-Perfect Telegram Android Email & Password Authentication Screen
 package com.neont.messenger.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.neont.messenger.theme.TelegramDarkBackground
-import com.neont.messenger.theme.TelegramDarkHeader
-import com.neont.messenger.theme.TelegramLightBlue
+import com.neont.messenger.ui.theme.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuthScreen(
     onLogin: (email: String, pass: String) -> Unit,
-    onRegister: (email: String, pass: String, name: String, username: String) -> Unit,
+    onRegister: (email: String, pass: String) -> Unit,
     errorMessage: String? = null,
-    isLoading: Boolean = false
+    isLoading: Boolean = false,
+    modifier: Modifier = Modifier
 ) {
     var isRegisterMode by remember { mutableStateOf(false) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var displayName by remember { mutableStateOf("") }
-    var username by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(TelegramDarkBackground)
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = TelegramDarkHeader),
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth()
+    val focusManager = LocalFocusManager.current
+    val canProceed = email.isNotBlank() && password.length >= 6 && !isLoading
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    // Header teks besar "Your Email" (warna biru #2481CC, 20sp, Bold)
+                    Text(
+                        text = if (isRegisterMode) "Create Account" else "Your Email",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TelegramPrimary // #2481CC
+                    )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = TelegramDarkBG
+                )
+            )
+        },
+        containerColor = TelegramDarkBG,
+        modifier = modifier
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 24.dp, vertical = 16.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = if (isRegisterMode) "Create Neont Account" else "Sign in to Neont",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp
-                )
+            Text(
+                text = if (isRegisterMode) {
+                    "Please enter your email and choose a secure password to register."
+                } else {
+                    "Please enter your email address and password to sign in."
+                },
+                color = TelegramTextSecondary, // #8B9DAE
+                fontSize = 14.sp,
+                lineHeight = 20.sp
+            )
 
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "Please enter your credentials to sync messages",
-                    color = Color(0xFF7F92A2),
-                    fontSize = 13.sp
-                )
+            Spacer(Modifier.height(32.dp))
 
-                Spacer(Modifier.height(20.dp))
+            // Input Email
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("Email", color = TelegramTextSecondary) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                ),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = TelegramSurface,
+                    unfocusedContainerColor = TelegramSurface,
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = TelegramPrimary, // Garis bawah/border warna biru jika sedang diketik
+                    unfocusedBorderColor = Color.Transparent,
+                    cursorColor = TelegramPrimary
+                ),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
 
-                if (isRegisterMode) {
-                    OutlinedTextField(
-                        value = displayName,
-                        onValueChange = { displayName = it },
-                        label = { Text("Full Name", color = Color.Gray) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = TelegramLightBlue
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(16.dp))
 
-                    OutlinedTextField(
-                        value = username,
-                        onValueChange = { username = it },
-                        label = { Text("Username (@handle)", color = Color.Gray) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = TelegramLightBlue
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(12.dp))
-                }
-
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    label = { Text("Email", color = Color.Gray) },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = TelegramLightBlue
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(Modifier.height(12.dp))
-
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text("Password", color = Color.Gray) },
-                    visualTransformation = PasswordVisualTransformation(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = TelegramLightBlue
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                if (errorMessage != null) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(text = errorMessage, color = Color.Red, fontSize = 12.sp)
-                }
-
-                Spacer(Modifier.height(24.dp))
-
-                Button(
-                    onClick = {
-                        if (isRegisterMode) {
-                            onRegister(email, password, displayName, username)
-                        } else {
-                            onLogin(email, password)
+            // Input Password
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Password", color = TelegramTextSecondary) },
+                singleLine = true,
+                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        if (canProceed) {
+                            focusManager.clearFocus()
+                            if (isRegisterMode) onRegister(email, password) else onLogin(email, password)
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = TelegramLightBlue),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    enabled = !isLoading
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                    } else {
-                        Text(
-                            text = if (isRegisterMode) "Register" else "Log In",
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp
+                    }
+                ),
+                trailingIcon = {
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(
+                            imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                            contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                            tint = TelegramTextSecondary
                         )
                     }
-                }
+                },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = TelegramSurface,
+                    unfocusedContainerColor = TelegramSurface,
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = TelegramPrimary, // Garis bawah/border warna biru jika sedang diketik
+                    unfocusedBorderColor = Color.Transparent,
+                    cursorColor = TelegramPrimary
+                ),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
 
-                Spacer(Modifier.height(16.dp))
-
+            AnimatedVisibility(visible = errorMessage != null) {
                 Text(
-                    text = if (isRegisterMode) "Already have an account? Sign In" else "Don't have an account? Register",
-                    color = TelegramLightBlue,
+                    text = errorMessage ?: "",
+                    color = TelegramRed,
                     fontSize = 13.sp,
-                    modifier = Modifier.clickable { isRegisterMode = !isRegisterMode }
+                    modifier = Modifier.padding(top = 12.dp)
                 )
             }
+
+            Spacer(Modifier.weight(1f))
+
+            // Tombol "NEXT" / "LOGIN" berwarna biru (#2481CC) full width, tinggi 56dp
+            Button(
+                onClick = {
+                    focusManager.clearFocus()
+                    if (isRegisterMode) {
+                        onRegister(email.trim(), password.trim())
+                    } else {
+                        onLogin(email.trim(), password.trim())
+                    }
+                },
+                enabled = canProceed,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TelegramPrimary, // #2481CC
+                    disabledContainerColor = TelegramSurface
+                ),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(
+                        text = if (isRegisterMode) "SIGN UP" else "NEXT",
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Teks kecil di bawah: Toggle antara mode Login dan Register
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = if (isRegisterMode) "Already have an account? " else "Don't have an account? ",
+                    color = TelegramTextSecondary,
+                    fontSize = 13.sp
+                )
+                Text(
+                    text = if (isRegisterMode) "Sign In" else "Sign Up",
+                    color = TelegramPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable {
+                        isRegisterMode = !isRegisterMode
+                    }
+                )
+            }
+
+            Spacer(Modifier.height(20.dp))
         }
     }
 }

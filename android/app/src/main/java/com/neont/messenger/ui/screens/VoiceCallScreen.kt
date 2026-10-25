@@ -1,5 +1,5 @@
 // Neont Messenger - VoiceCallScreen.kt
-// Layar Panggilan Suara Telegram: Timer berjalan, Mute/Speaker toggle, dan End Call
+// Pixel-Perfect Telegram Android Voice Call Interface
 package com.neont.messenger.ui.screens
 
 import androidx.compose.foundation.background
@@ -14,113 +14,141 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.neont.messenger.ui.components.TelegramAvatar
+import com.neont.messenger.ui.theme.*
 import kotlinx.coroutines.delay
 
 @Composable
 fun VoiceCallScreen(
     contactName: String,
-    contactAvatarUrl: String = "",
-    onEndCall: (durationSec: Int) -> Unit
+    onEndCall: (durationSeconds: Int) -> Unit = {},
+    modifier: Modifier = Modifier
 ) {
-    var callSeconds by remember { mutableIntStateOf(0) }
+    var callDuration by remember { mutableIntStateOf(0) }
     var isMuted by remember { mutableStateOf(false) }
     var isSpeakerOn by remember { mutableStateOf(false) }
     var isBluetoothOn by remember { mutableStateOf(false) }
+    var isVideoRequested by remember { mutableStateOf(false) }
 
-    // Timer berjalan
     LaunchedEffect(Unit) {
         while (true) {
             delay(1000)
-            callSeconds++
+            callDuration++
         }
     }
 
-    val formattedTime = remember(callSeconds) {
-        val min = callSeconds / 60
-        val sec = callSeconds % 60
+    val timeString = remember(callDuration) {
+        val min = callDuration / 60
+        val sec = callDuration % 60
         String.format("%02d:%02d", min, sec)
     }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF0F141C))
-            .padding(24.dp)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        Color(0xFF0F1721),
+                        Color(0xFF17212B),
+                        Color(0xFF0B1015)
+                    )
+                )
+            )
+            .padding(horizontal = 24.dp, vertical = 32.dp)
     ) {
-        // Bagian Atas: Kontak & Timer
+        // Top Section: Avatar 120dp, Name 24sp, Timer 16sp
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
-                .padding(top = 60.dp),
+                .padding(top = 48.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Avatar: 120dp di tengah atas
             TelegramAvatar(
                 name = contactName,
-                avatarUrl = contactAvatarUrl,
-                size = 110
+                size = 120
             )
 
             Spacer(Modifier.height(20.dp))
 
+            // Nama: 24sp putih
             Text(
                 text = contactName,
                 color = Color.White,
-                fontSize = 26.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.Bold
             )
 
             Spacer(Modifier.height(8.dp))
 
+            // Status: Timer (00:23) 16sp warna abu (#8B9DAE)
             Text(
-                text = formattedTime,
-                color = Color(0xFF4FA0FF),
+                text = if (callDuration == 0) "calling..." else timeString,
+                color = TelegramTextSecondary, // #8B9DAE
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium
             )
 
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(8.dp))
 
-            Text(
-                text = "End-to-end encrypted",
-                color = Color(0xFF7F92A2),
-                fontSize = 12.sp
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = "Encrypted",
+                    tint = TelegramCheckmark,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = "End-to-end encrypted",
+                    color = TelegramTextSecondary,
+                    fontSize = 12.sp
+                )
+            }
         }
 
-        // Bagian Bawah: Tombol Kontrol Panggilan
+        // Bottom Section: Tombol bawah Mute, Speaker, Video, Bluetooth, End Call
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 40.dp),
+                .padding(bottom = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                CallControlButton(
+                CallRoundButton(
                     icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                    label = if (isMuted) "Unmute" else "Mute",
+                    label = "Mute",
                     isActive = isMuted,
                     onClick = { isMuted = !isMuted }
                 )
 
-                CallControlButton(
+                CallRoundButton(
+                    icon = if (isVideoRequested) Icons.Default.Videocam else Icons.Default.VideocamOff,
+                    label = "Video",
+                    isActive = isVideoRequested,
+                    onClick = { isVideoRequested = !isVideoRequested }
+                )
+
+                CallRoundButton(
                     icon = if (isSpeakerOn) Icons.Default.VolumeUp else Icons.Default.VolumeDown,
                     label = "Speaker",
                     isActive = isSpeakerOn,
                     onClick = { isSpeakerOn = !isSpeakerOn }
                 )
 
-                CallControlButton(
+                CallRoundButton(
                     icon = Icons.Default.Bluetooth,
                     label = "Bluetooth",
                     isActive = isBluetoothOn,
@@ -130,13 +158,13 @@ fun VoiceCallScreen(
 
             Spacer(Modifier.height(36.dp))
 
-            // Tombol Akhiri Panggilan (Merah)
+            // Tombol End Call: Lingkaran merah menyala #E53935
             Box(
                 modifier = Modifier
-                    .size(68.dp)
+                    .size(64.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFE53935))
-                    .clickable { onEndCall(callSeconds) },
+                    .background(TelegramRed) // #E53935
+                    .clickable { onEndCall(callDuration) },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -151,7 +179,7 @@ fun VoiceCallScreen(
 }
 
 @Composable
-private fun CallControlButton(
+private fun CallRoundButton(
     icon: ImageVector,
     label: String,
     isActive: Boolean,
@@ -162,7 +190,7 @@ private fun CallControlButton(
             modifier = Modifier
                 .size(56.dp)
                 .clip(CircleShape)
-                .background(if (isActive) Color.White else Color(0xFF242F3D))
+                .background(if (isActive) Color.White else TelegramSurface)
                 .clickable { onClick() },
             contentAlignment = Alignment.Center
         ) {
@@ -170,13 +198,13 @@ private fun CallControlButton(
                 imageVector = icon,
                 contentDescription = label,
                 tint = if (isActive) Color.Black else Color.White,
-                modifier = Modifier.size(26.dp)
+                modifier = Modifier.size(24.dp)
             )
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
             text = label,
-            color = Color.LightGray,
+            color = TelegramTextSecondary,
             fontSize = 12.sp
         )
     }
