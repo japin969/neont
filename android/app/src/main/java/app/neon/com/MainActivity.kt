@@ -214,7 +214,6 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                 settings = appSettings,
                 fileDb = fileDb,
                 onChatClick = { chatId -> currentScreen = Screen.Chat(chatId) },
-                onSettingsClick = { currentScreen = Screen.Settings },
             )
         }
         is Screen.Chat -> {
@@ -345,7 +344,6 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                 contacts = contacts,
                 fileDb = fileDb,
                 onChatClick = { chatId -> currentScreen = Screen.Chat(chatId) },
-                onSettingsClick = { currentScreen = Screen.Settings },
             )
         }
         is Screen.UserProfile -> {
