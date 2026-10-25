@@ -1,0 +1,6 @@
+{
+  "name": "Neont Messenger",
+  "description": "Pixel-perfect Telegram Android replica with hybrid JSON file-based local persistence and Firebase Realtime Database.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
