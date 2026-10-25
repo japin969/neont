@@ -37,3 +37,13 @@ val TelegramLightBlue = TelegramPrimary
 val TelegramDarkDivider = TelegramDivider
 val TelegramBubbleOutLight = Color(0xFFEFFDFF)
 val TelegramBubbleInLight = Color(0xFFFFFFFF)
+
+// Tambahan Warna yang Hilang
+val BadgeUnread = Color(0xFF5288C1)
+val OnlineGreen = Color(0xFF4FCE5D)
+val AvatarGradients = listOf(
+    listOf(Color(0xFFFF8850), Color(0xFFFF5E3A)),
+    listOf(Color(0xFF4FCE5D), Color(0xFF3EAD4B)),
+    listOf(Color(0xFF52B1FF), Color(0xFF3A8DDB)),
+    listOf(Color(0xFFB55FEF), Color(0xFF8E3AC2))
+)

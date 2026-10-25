@@ -16,10 +16,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.neon.com.data.model.User
-import app.neon.com.theme.TelegramDarkBackground
-import app.neon.com.theme.TelegramDarkDivider
-import app.neon.com.theme.TelegramDarkHeader
-import app.neon.com.theme.TelegramLightBlue
+import app.neon.com.ui.theme.TelegramDarkBackground
+import app.neon.com.ui.theme.TelegramDarkDivider
+import app.neon.com.ui.theme.TelegramDarkHeader
+import app.neon.com.ui.theme.TelegramLightBlue
 import app.neon.com.ui.components.TelegramAvatar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -101,5 +101,25 @@ fun OtherProfileScreen(
                 InfoBlock(label = user.bio.ifBlank { "Using Neont Messenger" }, sublabel = "Bio")
             }
         }
+    }
+}
+
+@Composable
+fun InfoBlock(label: String, sublabel: String) {
+    androidx.compose.foundation.layout.Column(
+        modifier = androidx.compose.ui.Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        androidx.compose.material3.Text(
+            text = label,
+            color = androidx.compose.ui.graphics.Color.White,
+            fontSize = 16.sp
+        )
+        androidx.compose.material3.Text(
+            text = sublabel,
+            color = androidx.compose.ui.graphics.Color.Gray,
+            fontSize = 14.sp
+        )
     }
 }

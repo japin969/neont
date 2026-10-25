@@ -6,7 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddCall
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CallMade
 import androidx.compose.material.icons.filled.CallMissed
 import androidx.compose.material.icons.filled.CallReceived
@@ -67,7 +67,7 @@ fun CallsScreen(
                 contentColor = Color.White,
                 shape = CircleShape
             ) {
-                Icon(Icons.Default.AddCall, contentDescription = "New Call")
+                Icon(Icons.Default.Add, contentDescription = "New Call")
             }
         },
         containerColor = TelegramDarkBG,

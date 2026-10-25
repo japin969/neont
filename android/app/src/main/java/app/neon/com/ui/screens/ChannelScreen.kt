@@ -23,9 +23,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.neon.com.data.model.Chat
 import app.neon.com.data.model.Message
-import app.neon.com.theme.TelegramDarkBackground
-import app.neon.com.theme.TelegramDarkHeader
-import app.neon.com.theme.TelegramLightBlue
+import app.neon.com.ui.theme.TelegramDarkBackground
+import app.neon.com.ui.theme.TelegramDarkHeader
+import app.neon.com.ui.theme.TelegramLightBlue
 import app.neon.com.ui.components.TelegramAvatar
 import java.text.SimpleDateFormat
 import java.util.*

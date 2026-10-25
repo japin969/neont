@@ -21,10 +21,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.neon.com.data.model.Chat
 import app.neon.com.data.model.User
-import app.neon.com.theme.TelegramDarkBackground
-import app.neon.com.theme.TelegramDarkDivider
-import app.neon.com.theme.TelegramDarkHeader
-import app.neon.com.theme.TelegramLightBlue
+import app.neon.com.ui.theme.TelegramDarkBackground
+import app.neon.com.ui.theme.TelegramDarkDivider
+import app.neon.com.ui.theme.TelegramDarkHeader
+import app.neon.com.ui.theme.TelegramLightBlue
 import app.neon.com.ui.components.TelegramAvatar
 
 @OptIn(ExperimentalMaterial3Api::class)
