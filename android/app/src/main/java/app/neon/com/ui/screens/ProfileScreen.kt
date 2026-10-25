@@ -33,6 +33,10 @@ fun ProfileScreen(
     user: User,
     onBackClick: () -> Unit,
     onEditClick: () -> Unit,
+    onChatSettingsClick: () -> Unit = {},
+    onDataStorageClick: () -> Unit = {},
+    onDevicesClick: () -> Unit = {},
+    onLanguageClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -220,7 +224,7 @@ fun ProfileScreen(
                 ProfileMenuItem(
                     icon = Icons.Default.Notifications,
                     title = "Notifications and Sounds",
-                    onClick = {}
+                    onClick = { /* TODO */ }
                 )
                 Divider(color = TelegramDivider, thickness = 0.5.dp, modifier = Modifier.padding(start = 68.dp))
             }
@@ -229,7 +233,7 @@ fun ProfileScreen(
                 ProfileMenuItem(
                     icon = Icons.Default.Lock,
                     title = "Privacy and Security",
-                    onClick = {}
+                    onClick = { /* TODO */ }
                 )
                 Divider(color = TelegramDivider, thickness = 0.5.dp, modifier = Modifier.padding(start = 68.dp))
             }
@@ -238,7 +242,7 @@ fun ProfileScreen(
                 ProfileMenuItem(
                     icon = Icons.Default.PieChart,
                     title = "Data and Storage",
-                    onClick = {}
+                    onClick = { /* TODO */ }
                 )
                 Divider(color = TelegramDivider, thickness = 0.5.dp, modifier = Modifier.padding(start = 68.dp))
             }
@@ -247,7 +251,7 @@ fun ProfileScreen(
                 ProfileMenuItem(
                     icon = Icons.Default.Chat,
                     title = "Chat Settings",
-                    onClick = {}
+                    onClick = { /* TODO */ }
                 )
                 Divider(color = TelegramDivider, thickness = 0.5.dp, modifier = Modifier.padding(start = 68.dp))
             }
@@ -256,7 +260,7 @@ fun ProfileScreen(
                 ProfileMenuItem(
                     icon = Icons.Default.Devices,
                     title = "Devices",
-                    onClick = {}
+                    onClick = { /* TODO */ }
                 )
                 Divider(color = TelegramDivider, thickness = 0.5.dp, modifier = Modifier.padding(start = 68.dp))
             }
@@ -265,7 +269,7 @@ fun ProfileScreen(
                 ProfileMenuItem(
                     icon = Icons.Default.Language,
                     title = "Language",
-                    onClick = {}
+                    onClick = { /* TODO */ }
                 )
             }
 

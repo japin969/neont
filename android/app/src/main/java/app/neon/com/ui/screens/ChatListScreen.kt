@@ -124,7 +124,7 @@ fun ChatListScreen(
                             tint = Color.White
                         )
                     }
-                    IconButton(onClick = {}) {
+                    IconButton(onClick = { /* TODO: Search */ }) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
                             contentDescription = "More",

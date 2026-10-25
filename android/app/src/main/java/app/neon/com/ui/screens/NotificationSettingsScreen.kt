@@ -1,12 +1,10 @@
-// Neont Messenger - NotificationSettingsScreen.kt
-// Layar Notifikasi dan Suara Telegram Android
 package app.neon.com.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,73 +13,90 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.neon.com.ui.theme.TelegramDarkBackground
-import app.neon.com.ui.theme.TelegramDarkHeader
-import app.neon.com.ui.theme.TelegramLightBlue
+import app.neon.com.data.model.AppSettings
+import app.neon.com.data.model.NotificationSettings
+import app.neon.com.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationSettingsScreen(
-    onBackClick: () -> Unit
+    settings: AppSettings,
+    onSaveSettings: (AppSettings) -> Unit,
+    onBackClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    var privateChatsEnabled by remember { mutableStateOf(true) }
-    var groupsEnabled by remember { mutableStateOf(true) }
-    var channelsEnabled by remember { mutableStateOf(false) }
-    var vibrateEnabled by remember { mutableStateOf(true) }
+    var notif by remember { mutableStateOf(settings.notifications) }
 
     Scaffold(
         topBar = {
             TopAppBar(
+                title = { Text("Notifications and Sounds", color = Color.White, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, "Back", tint = Color.White)
                     }
                 },
-                title = { Text("Notifications and Sounds", color = Color.White, fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = TelegramDarkHeader)
             )
         },
-        containerColor = TelegramDarkBackground
+        containerColor = TelegramDarkBG,
+        modifier = modifier
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            Text("Message notifications", color = TelegramLightBlue, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(16.dp))
-
-            SwitchSettingsRow("Private Chats", "Tap to change preview and sound", privateChatsEnabled) { privateChatsEnabled = it }
-            SwitchSettingsRow("Groups", "Tap to change preview and sound", groupsEnabled) { groupsEnabled = it }
-            SwitchSettingsRow("Channels", "Silent by default", channelsEnabled) { channelsEnabled = it }
-
-            Divider(color = Color(0xFF101419), thickness = 8.dp)
-
-            Text("In-app notifications", color = TelegramLightBlue, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(16.dp))
-
-            SwitchSettingsRow("In-App Sounds", "Play sound on incoming message", true) {}
-            SwitchSettingsRow("In-App Vibrate", "Vibrate device", vibrateEnabled) { vibrateEnabled = it }
+        LazyColumn(modifier = Modifier.padding(padding).fillMaxSize()) {
+            item {
+                Text("MESSAGE NOTIFICATIONS", color = TelegramPrimary, fontSize = 13.sp, modifier = Modifier.padding(16.dp, 8.dp))
+            }
+            item {
+                ToggleRow("Private Chats", notif.privateChatsEnabled) {
+                    notif = notif.copy(privateChatsEnabled = it)
+                    onSaveSettings(settings.copy(notifications = notif))
+                }
+            }
+            item {
+                ToggleRow("Groups", notif.groupsEnabled) {
+                    notif = notif.copy(groupsEnabled = it)
+                    onSaveSettings(settings.copy(notifications = notif))
+                }
+            }
+            item {
+                ToggleRow("Channels", notif.channelsEnabled) {
+                    notif = notif.copy(channelsEnabled = it)
+                    onSaveSettings(settings.copy(notifications = notif))
+                }
+            }
+            item { Divider(color = TelegramDarkDivider) }
+            item {
+                Text("IN-APP", color = TelegramPrimary, fontSize = 13.sp, modifier = Modifier.padding(16.dp, 8.dp))
+            }
+            item {
+                ToggleRow("Sounds", notif.inAppSounds) {
+                    notif = notif.copy(inAppSounds = it)
+                    onSaveSettings(settings.copy(notifications = notif))
+                }
+            }
+            item {
+                ToggleRow("Vibrate", notif.inAppVibrate) {
+                    notif = notif.copy(inAppVibrate = it)
+                    onSaveSettings(settings.copy(notifications = notif))
+                }
+            }
+            item {
+                ToggleRow("Message Preview", notif.inAppPreview) {
+                    notif = notif.copy(inAppPreview = it)
+                    onSaveSettings(settings.copy(notifications = notif))
+                }
+            }
         }
     }
 }
 
 @Composable
-fun SwitchSettingsRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
+fun ToggleRow(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }.padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-            Text(subtitle, color = Color(0xFF7F92A2), fontSize = 12.sp)
-        }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = TelegramLightBlue)
-        )
+        Text(title, color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }

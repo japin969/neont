@@ -32,7 +32,12 @@ fun SettingsScreen(
     onEditProfileClick: () -> Unit = {},
     onPrivacyClick: () -> Unit = {},
     onNotificationClick: () -> Unit = {},
+    onSaveSettings: (AppSettings) -> Unit = {},
     onLogoutClick: () -> Unit = {},
+    onDataStorageClick: () -> Unit = {},
+    onChatSettingsClick: () -> Unit = {},
+    onLanguageClick: () -> Unit = {},
+    onDevicesClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val user = currentUser ?: User(
@@ -136,14 +141,14 @@ fun SettingsScreen(
                     SettingsMenuItem(
                         icon = Icons.Default.PieChart,
                         title = "Data and Storage",
-                        onClick = {}
+                        onClick = onDataStorageClick
                     )
                     Divider(color = TelegramDivider, thickness = 0.5.dp, modifier = Modifier.padding(start = 56.dp))
 
                     SettingsMenuItem(
                         icon = Icons.Default.Chat,
                         title = "Chat Settings",
-                        onClick = {}
+                        onClick = onChatSettingsClick
                     )
                     Divider(color = TelegramDivider, thickness = 0.5.dp, modifier = Modifier.padding(start = 56.dp))
 
@@ -151,7 +156,7 @@ fun SettingsScreen(
                         icon = Icons.Default.Language,
                         title = "Language",
                         subtitle = "English",
-                        onClick = {}
+                        onClick = onLanguageClick
                     )
                 }
 

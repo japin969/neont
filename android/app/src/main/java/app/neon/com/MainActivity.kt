@@ -30,8 +30,7 @@ import app.neon.com.data.ChatRepository
 import app.neon.com.data.FileDatabaseManager
 import app.neon.com.data.FilebaseStorage
 import app.neon.com.data.model.*
-import app.neon.com.ui.screens.ChatDetailScreen
-import app.neon.com.ui.screens.MainScreen
+import app.neon.com.ui.screens.*
 import app.neon.com.ui.theme.NeontTheme
 import app.neon.com.ui.theme.TelegramDarkBG
 import app.neon.com.utils.NotificationHelper
@@ -92,57 +91,65 @@ fun AppRoot(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Cont
     }
 }
 
+// State navigasi sederhana
+sealed class Screen {
+    object Home : Screen()
+    object Settings : Screen()
+    object Privacy : Screen()
+    object Notification : Screen()
+    object EditProfile : Screen()
+    object DataStorage : Screen()
+    object ChatSettings : Screen()
+    object Language : Screen()
+    object Devices : Screen()
+    object Search : Screen()
+    data class UserProfile(val user: User) : Screen()
+    data class Chat(val chatId: String) : Screen()
+}
+
 @Composable
 fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Context) {
     val scope = rememberCoroutineScope()
     val filebase = remember { FilebaseStorage(context) }
     
+    var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
+    
     var chats by remember { mutableStateOf<List<Chat>>(emptyList()) }
     var contacts by remember { mutableStateOf<List<User>>(emptyList()) }
     var currentUser by remember { mutableStateOf<User?>(null) }
-    var selectedChatId by remember { mutableStateOf<String?>(null) }
-    var selectedChat by remember { mutableStateOf<Chat?>(null) }
     var chatMessages by remember { mutableStateOf<List<Message>>(emptyList()) }
     var isContactOnline by remember { mutableStateOf(false) }
     var isUploading by remember { mutableStateOf(false) }
+    var appSettings by remember { mutableStateOf(AppSettings()) }
 
     var isRecording by remember { mutableStateOf(false) }
     val audioRecorder = remember { AudioRecorder(context) }
 
-    // Inisialisasi Presence (Online/Offline)
     LaunchedEffect(Unit) {
         chatRepo.setupPresence("me")
         scope.launch {
             contacts = fileDb.readUsers()
             currentUser = contacts.firstOrNull { it.uid == "me" }
+            appSettings = fileDb.readSettings()
             
-            // Realtime List Chat
-            chatRepo.listenToChats().collect { updatedChats ->
-                chats = updatedChats
-            }
+            chatRepo.listenToChats().collect { updatedChats -> chats = updatedChats }
         }
     }
 
-    // Realtime Messages & Presence
-    LaunchedEffect(selectedChatId) {
-        if (selectedChatId != null) {
-            selectedChat = chats.firstOrNull { it.chatId == selectedChatId }
-            
-            // Dengerin pesan
+    LaunchedEffect(currentScreen) {
+        if (currentScreen is Screen.Chat) {
+            val chatId = (currentScreen as Screen.Chat).chatId
             launch {
-                chatRepo.listenToMessages(selectedChatId!!).collect { msgs ->
+                chatRepo.listenToMessages(chatId).collect { msgs ->
                     chatMessages = msgs
                     if (msgs.isNotEmpty() && msgs.last().senderId != "me") {
-                        NotificationHelper.showNotification(context, selectedChat?.title ?: "New Message", msgs.last().text)
+                        val chatName = chats.firstOrNull { it.chatId == chatId }?.title ?: "New Message"
+                        NotificationHelper.showNotification(context, chatName, msgs.last().text)
                     }
                 }
             }
-            
-            // Dengerin status online lawan chat
             launch {
-                chatRepo.listenToUserPresence(selectedChat?.chatId ?: "").collect { online ->
-                    isContactOnline = online
-                }
+                chatRepo.listenToUserPresence(chatId).collect { online -> isContactOnline = online }
             }
         } else {
             chatMessages = emptyList()
@@ -150,7 +157,7 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
     }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        if (uri != null && selectedChatId != null) {
+        if (uri != null && currentScreen is Screen.Chat) {
             scope.launch {
                 isUploading = true
                 try {
@@ -168,7 +175,7 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                         val fileUrl = filebase.uploadFile(fileName, mimeType, inputStream)
                         inputStream.close()
                         val type = if (mimeType.startsWith("image/")) MessageType.IMAGE else if (mimeType.startsWith("video/")) MessageType.VIDEO else MessageType.FILE
-                        chatRepo.sendMessage(selectedChatId!!, "me", fileUrl, type, fileUrl)
+                        chatRepo.sendMessage((currentScreen as Screen.Chat).chatId, "me", fileUrl, type, fileUrl)
                     }
                 } catch (e: Exception) { e.printStackTrace() } finally { isUploading = false }
             }
@@ -191,60 +198,164 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
         }
     }
 
-    BackHandler(enabled = selectedChatId != null) { selectedChatId = null }
+    BackHandler(enabled = currentScreen !is Screen.Home) {
+        currentScreen = if (currentScreen is Screen.Chat) Screen.Home else Screen.Home
+    }
 
-    if (selectedChatId == null) {
-        MainScreen(
-            currentUser = currentUser,
-            chats = chats,
-            contacts = contacts,
-            stories = emptyList(),
-            calls = emptyList(),
-            settings = AppSettings(),
-            fileDb = fileDb,
-            onChatClick = { chatId -> selectedChatId = chatId }
-        )
-    } else {
-        ChatDetailScreen(
-            chatId = selectedChatId,
-            chat = selectedChat,
-            messages = chatMessages,
-            currentUserId = "me",
-            isContactOnline = isContactOnline,
-            fileDb = fileDb,
-            chatRepo = chatRepo,
-            onBackClicked = { selectedChatId = null },
-            onSendMessage = { text ->
-                scope.launch {
-                    selectedChatId?.let { chatId -> chatRepo.sendMessage(chatId, "me", text) }
-                }
-            },
-            onAttachClick = { option ->
-                if (option == "Gallery") filePicker.launch("image/*") else filePicker.launch("*/*")
-            },
-            onMicClick = {
-                if (isRecording) {
-                    val file = audioRecorder.stopRecording()
-                    isRecording = false
-                    if (file != null && file.exists()) {
-                        scope.launch {
-                            try {
-                                val inputStream = file.inputStream()
-                                val fileUrl = filebase.uploadFile(file.name, "audio/m4a", inputStream)
-                                inputStream.close()
-                                chatRepo.sendMessage(selectedChatId!!, "me", fileUrl, MessageType.VOICE, fileUrl)
-                            } catch (e: Exception) { e.printStackTrace() }
+    when (val screen = currentScreen) {
+        is Screen.Home -> {
+            MainScreen(
+                currentUser = currentUser,
+                chats = chats,
+                contacts = contacts,
+                stories = emptyList(),
+                calls = emptyList(),
+                settings = appSettings,
+                fileDb = fileDb,
+                onChatClick = { chatId -> currentScreen = Screen.Chat(chatId) },
+                onEditProfileClick = { currentScreen = Screen.Settings }, // Sementara ke settings dulu
+                onChatSettingsClick = { currentScreen = Screen.ChatSettings },
+                onDataStorageClick = { currentScreen = Screen.DataStorage },
+                onDevicesClick = { currentScreen = Screen.Devices },
+                onLanguageClick = { currentScreen = Screen.Language },
+                onSearchClick = { currentScreen = Screen.Search },
+                onContactClick = { user -> currentScreen = Screen.UserProfile(user) }
+            )
+        }
+        is Screen.Chat -> {
+            val chat = chats.firstOrNull { it.chatId == screen.chatId }
+            ChatDetailScreen(
+                chatId = screen.chatId,
+                chat = chat,
+                messages = chatMessages,
+                currentUserId = "me",
+                isContactOnline = isContactOnline,
+                fileDb = fileDb,
+                chatRepo = chatRepo,
+                onBackClicked = { currentScreen = Screen.Home },
+                onSendMessage = { text ->
+                    scope.launch { chatRepo.sendMessage(screen.chatId, "me", text) }
+                },
+                onAttachClick = { option ->
+                    if (option == "Gallery") filePicker.launch("image/*") else filePicker.launch("*/*")
+                },
+                onMicClick = {
+                    if (isRecording) {
+                        val file = audioRecorder.stopRecording()
+                        isRecording = false
+                        if (file != null && file.exists()) {
+                            scope.launch {
+                                try {
+                                    val inputStream = file.inputStream()
+                                    val fileUrl = filebase.uploadFile(file.name, "audio/m4a", inputStream)
+                                    inputStream.close()
+                                    chatRepo.sendMessage(screen.chatId, "me", fileUrl, MessageType.VOICE, fileUrl)
+                                } catch (e: Exception) { e.printStackTrace() }
+                            }
+                        }
+                    } else {
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                            isRecording = true
+                            audioRecorder.startRecording()
+                        } else {
+                            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                         }
                     }
-                } else {
-                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                        isRecording = true
-                        audioRecorder.startRecording()
-                    } else {
-                        micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                    }
                 }
-            }
-        )
+            )
+        }
+        is Screen.Settings -> {
+            SettingsScreen(
+                currentUser = currentUser,
+                settings = appSettings,
+                onEditProfileClick = { currentScreen = Screen.EditProfile },
+                onPrivacyClick = { currentScreen = Screen.Privacy },
+                onNotificationClick = { currentScreen = Screen.Notification },
+                onLogoutClick = { /* TODO: Login */ },
+                onDataStorageClick = { currentScreen = Screen.DataStorage },
+                onChatSettingsClick = { currentScreen = Screen.ChatSettings },
+                onLanguageClick = { currentScreen = Screen.Language },
+                onSearchClick = { currentScreen = Screen.Search },
+                onContactClick = { user -> currentScreen = Screen.UserProfile(user) },
+                onDevicesClick = { currentScreen = Screen.Devices }
+            )
+        }
+        is Screen.Privacy -> {
+            PrivacySettingsScreen(
+                settings = appSettings,
+                onSaveSettings = { newSettings ->
+                    appSettings = newSettings
+                    scope.launch { fileDb.writeSettings(newSettings) }
+                },
+                onBackClick = { currentScreen = Screen.Settings }
+            )
+        }
+        is Screen.Notification -> {
+            NotificationSettingsScreen(
+                settings = appSettings,
+                onSaveSettings = { newSettings ->
+                    appSettings = newSettings
+                    scope.launch { fileDb.writeSettings(newSettings) }
+                },
+                onBackClick = { currentScreen = Screen.Settings }
+            )
+        }
+        is Screen.EditProfile -> {
+            EditProfileScreen(
+                currentUser = currentUser,
+                onSaveProfile = { fName, lName, bio, avatar ->
+                    currentUser?.let { user ->
+                        val updated = user.copy(firstName = fName, lastName = lName, bio = bio, avatarUrl = avatar)
+                        currentUser = updated
+                        scope.launch { fileDb.upsertUser(updated) }
+                        currentScreen = Screen.Settings
+                    }
+                },
+                onBackClick = { currentScreen = Screen.Settings }
+            )
+        }
+        is Screen.DataStorage -> {
+            GenericSettingsScreen(
+                title = "Data and Storage",
+                description = "Pengaturan penyimpanan dan cache akan tersedia di pembaruan selanjutnya.",
+                onBackClick = { currentScreen = Screen.Settings }
+            )
+        }
+        is Screen.ChatSettings -> {
+            GenericSettingsScreen(
+                title = "Chat Settings",
+                description = "Pengaturan chat (wallpaper, font size, dll) akan tersedia di pembaruan selanjutnya.",
+                onBackClick = { currentScreen = Screen.Settings }
+            )
+        }
+        is Screen.Language -> {
+            GenericSettingsScreen(
+                title = "Language",
+                description = "Saat ini hanya mendukung Bahasa Indonesia & English (otomatis).",
+                onBackClick = { currentScreen = Screen.Settings }
+            )
+        }
+        is Screen.Devices -> {
+            GenericSettingsScreen(
+                title = "Devices",
+                description = "Belum ada perangkat lain yang terhubung.",
+                onBackClick = { currentScreen = Screen.Settings }
+            )
+        }
+        is Screen.Search -> {
+            SearchScreen(
+                onBackClick = { currentScreen = Screen.Home },
+                onUserClick = { user -> currentScreen = Screen.UserProfile(user) }
+            )
+        }
+        is Screen.UserProfile -> {
+            OtherProfileScreen(
+                user = screen.user,
+                onBackClick = { currentScreen = Screen.Home },
+                onVideoCallClick = { /* TODO: Video Call */ }
+            )
+        }
     }
 }
+
+

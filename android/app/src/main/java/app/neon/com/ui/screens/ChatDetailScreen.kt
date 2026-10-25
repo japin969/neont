@@ -99,7 +99,7 @@ fun ChatDetailScreen(
                     IconButton(onClick = onCallClick) {
                         Icon(Icons.Default.Phone, "Call", tint = Color.White)
                     }
-                    IconButton(onClick = {}) {
+                    IconButton(onClick = { /* TODO: Menu Chat */ }) {
                         Icon(Icons.Default.MoreVert, "More", tint = Color.White)
                     }
                 },
