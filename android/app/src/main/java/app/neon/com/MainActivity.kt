@@ -5,25 +5,21 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
-import app.neon.com.ui.navigation.NeontNavGraph
+import androidx.compose.ui.graphics.Color
 import app.neon.com.ui.theme.NeontTheme
-import app.neon.com.ui.theme.TelegramDarkBG
-import dagger.hilt.android.AndroidEntryPoint
 
-@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         setContent {
             NeontTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = TelegramDarkBG
+                    color = Color.Black
                 ) {
-                    NeontNavGraph()
+                    Text(text = "Neont Messenger Ready!", color = Color.White)
                 }
             }
         }

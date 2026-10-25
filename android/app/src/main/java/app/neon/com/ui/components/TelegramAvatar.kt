@@ -22,8 +22,8 @@ import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
-import app.neon.com.theme.AvatarGradients
-import app.neon.com.theme.OnlineGreen
+import app.neon.com.ui.theme.*
+import app.neon.com.ui.theme.*
 import kotlin.math.abs
 
 @Composable

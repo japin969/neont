@@ -4,11 +4,7 @@ import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import app.neon.com.data.crypto.RealMessageCrypto
-import app.neon.com.data.model.Chat
-import app.neon.com.data.model.LastMessageInfo
-import app.neon.com.data.model.Message
-import app.neon.com.data.model.MessageStatus
-import app.neon.com.data.model.MessageType
+import app.neon.com.data.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -18,62 +14,63 @@ import java.io.FileReader
 import java.io.FileWriter
 
 class FileDatabaseManager(private val context: Context) {
-
     private val gson = Gson()
-    private val dbDir = File(context.filesDir, "neont_db").apply {
-        if (!exists()) mkdirs()
-    }
-
+    private val dbDir = File(context.filesDir, "neont_db").apply { if (!exists()) mkdirs() }
     private val mutexMap = mutableMapOf<String, Mutex>()
     private val globalLock = Any()
 
-    init {
-        seedInitialData()
-    }
+    init { seedInitialData() }
 
     private fun getMutex(filename: String): Mutex = synchronized(globalLock) {
         mutexMap.getOrPut(filename) { Mutex() }
     }
 
-    suspend fun readChats(): List<Chat> = withContext(Dispatchers.IO) {
-        val filename = "chats.json"
+    private fun <T> readJson(filename: String, typeToken: TypeToken<T>): T? {
         val file = File(dbDir, filename)
-        getMutex(filename).withLock {
-            if (!file.exists()) return@withContext emptyList()
-            try {
-                FileReader(file).use { reader ->
-                    gson.fromJson(reader, object : TypeToken<List<Chat>>() {}.type) ?: emptyList()
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                emptyList()
-            }
+        if (!file.exists()) return null
+        return try {
+            FileReader(file).use { gson.fromJson(it, typeToken.type) }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
+    }
+
+    private fun <T> writeJson(filename: String, data: T) {
+        val file = File(dbDir, filename)
+        val tempFile = File(dbDir, "${filename}.tmp")
+        try {
+            FileWriter(tempFile).use { gson.toJson(data, it) }
+            if (tempFile.exists()) {
+                if (file.exists()) file.delete()
+                tempFile.renameTo(file)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            if (tempFile.exists()) tempFile.delete()
+        }
+    }
+
+    // --- CHATS ---
+    suspend fun readChats(): List<Chat> = withContext(Dispatchers.IO) {
+        getMutex("chats.json").withLock { readJson("chats.json", object : TypeToken<List<Chat>>() {}) ?: emptyList() }
     }
 
     suspend fun writeChats(chats: List<Chat>) = withContext(Dispatchers.IO) {
-        val filename = "chats.json"
-        val file = File(dbDir, filename)
-        getMutex(filename).withLock {
-            atomicWrite(file, chats)
-        }
+        getMutex("chats.json").withLock { writeJson("chats.json", chats) }
     }
 
+    suspend fun upsertChat(chat: Chat) = withContext(Dispatchers.IO) {
+        val current = readChats().toMutableList()
+        val idx = current.indexOfFirst { it.chatId == chat.chatId }
+        if (idx >= 0) current[idx] = chat else current.add(chat)
+        writeChats(current)
+    }
+
+    // --- MESSAGES ---
     suspend fun readMessages(chatId: String): List<Message> = withContext(Dispatchers.IO) {
         val filename = "messages_${chatId}.json"
-        val file = File(dbDir, filename)
-        val encryptedList: List<Message> = getMutex(filename).withLock {
-            if (!file.exists()) return@withContext emptyList()
-            try {
-                FileReader(file).use { reader ->
-                    gson.fromJson(reader, object : TypeToken<List<Message>>() {}.type) ?: emptyList()
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                emptyList()
-            }
-        }
-        // In-memory decryption
+        val encryptedList = getMutex(filename).withLock { readJson(filename, object : TypeToken<List<Message>>() {}) ?: emptyList() }
         encryptedList.map { msg ->
             if (!msg.cipherText.isNullOrBlank() && !msg.iv.isNullOrBlank()) {
                 val plain = RealMessageCrypto.decrypt(msg.cipherText, msg.iv, chatId, msg.text)
@@ -84,38 +81,17 @@ class FileDatabaseManager(private val context: Context) {
 
     suspend fun appendMessage(chatId: String, message: Message): List<Message> = withContext(Dispatchers.IO) {
         val filename = "messages_${chatId}.json"
-        val file = File(dbDir, filename)
-
-        // Enkripsi sebelum disimpan ke file JSON lokal
         val diskMsg = if (message.cipherText.isNullOrBlank() && message.text.isNotBlank()) {
             val encrypted = RealMessageCrypto.encrypt(message.text, chatId)
             message.copy(text = "", cipherText = encrypted.cipherText, iv = encrypted.iv, encryptedKey = encrypted.encryptedKey)
         } else message
 
         getMutex(filename).withLock {
-            val currentList = if (file.exists()) {
-                try {
-                    FileReader(file).use { reader ->
-                        val data: List<Message>? = gson.fromJson(reader, object : TypeToken<List<Message>>() {}.type)
-                        data?.toMutableList() ?: mutableListOf()
-                    }
-                } catch (e: Exception) {
-                    mutableListOf()
-                }
-            } else {
-                mutableListOf()
-            }
+            val currentList = readJson(filename, object : TypeToken<MutableList<Message>>() {}) ?: mutableListOf()
+            val idx = currentList.indexOfFirst { it.msgId == diskMsg.msgId }
+            if (idx >= 0) currentList[idx] = diskMsg else currentList.add(diskMsg)
+            writeJson(filename, currentList)
 
-            val existingIndex = currentList.indexOfFirst { it.msgId == diskMsg.msgId }
-            if (existingIndex >= 0) {
-                currentList[existingIndex] = diskMsg
-            } else {
-                currentList.add(diskMsg)
-            }
-
-            atomicWrite(file, currentList)
-
-            // Return in-memory decrypted messages for UI
             currentList.map { msg ->
                 if (!msg.cipherText.isNullOrBlank() && !msg.iv.isNullOrBlank()) {
                     msg.copy(text = RealMessageCrypto.decrypt(msg.cipherText, msg.iv, chatId, msg.text))
@@ -124,104 +100,62 @@ class FileDatabaseManager(private val context: Context) {
         }
     }
 
-    private fun <T> atomicWrite(targetFile: File, data: T) {
-        val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp")
-        try {
-            FileWriter(tempFile).use { writer ->
-                gson.toJson(data, writer)
-            }
-            if (tempFile.exists()) {
-                if (targetFile.exists()) targetFile.delete()
-                tempFile.renameTo(targetFile)
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            if (tempFile.exists()) tempFile.delete()
-        }
+    // --- USERS ---
+    suspend fun readUsers(): List<User> = withContext(Dispatchers.IO) {
+        getMutex("users.json").withLock { readJson("users.json", object : TypeToken<List<User>>() {}) ?: emptyList() }
+    }
+    suspend fun writeUsers(users: List<User>) = withContext(Dispatchers.IO) {
+        getMutex("users.json").withLock { writeJson("users.json", users) }
+    }
+    suspend fun upsertUser(user: User) = withContext(Dispatchers.IO) {
+        val current = readUsers().toMutableList()
+        val idx = current.indexOfFirst { it.uid == user.uid }
+        if (idx >= 0) current[idx] = user else current.add(user)
+        writeUsers(current)
+    }
+
+    // --- STORIES ---
+    suspend fun readStories(): List<Story> = withContext(Dispatchers.IO) {
+        getMutex("stories.json").withLock { readJson("stories.json", object : TypeToken<List<Story>>() {}) ?: emptyList() }
+    }
+    suspend fun writeStories(stories: List<Story>) = withContext(Dispatchers.IO) {
+        getMutex("stories.json").withLock { writeJson("stories.json", stories) }
+    }
+
+    // --- CALLS ---
+    suspend fun readCalls(): List<CallLog> = withContext(Dispatchers.IO) {
+        getMutex("calls.json").withLock { readJson("calls.json", object : TypeToken<List<CallLog>>() {}) ?: emptyList() }
+    }
+    suspend fun writeCalls(calls: List<CallLog>) = withContext(Dispatchers.IO) {
+        getMutex("calls.json").withLock { writeJson("calls.json", calls) }
+    }
+
+    // --- SETTINGS ---
+    suspend fun readSettings(): AppSettings = withContext(Dispatchers.IO) {
+        getMutex("settings.json").withLock { readJson("settings.json", object : TypeToken<AppSettings>() {}) ?: AppSettings() }
+    }
+    suspend fun writeSettings(settings: AppSettings) = withContext(Dispatchers.IO) {
+        getMutex("settings.json").withLock { writeJson("settings.json", settings) }
     }
 
     private fun seedInitialData() {
         val chatsFile = File(dbDir, "chats.json")
         if (!chatsFile.exists()) {
             val initialChats = listOf(
-                Chat(
-                    chatId = "c_pavel",
-                    title = "Pavel Durov",
-                    avatarUrl = "",
-                    isPinned = true,
-                    unreadCount = 2,
-                    lastMessage = LastMessageInfo(
-                        text = "Native Android Kotlin + Jetpack Compose ready.",
-                        senderId = "u_pavel",
-                        timestamp = System.currentTimeMillis() - 120000,
-                        status = MessageStatus.READ,
-                        type = MessageType.TEXT
-                    )
-                ),
-                Chat(
-                    chatId = "c_elena",
-                    title = "Elena Rostova",
-                    avatarUrl = "",
-                    isPinned = false,
-                    unreadCount = 0,
-                    lastMessage = LastMessageInfo(
-                        text = "Voice message (0:14)",
-                        senderId = "u_elena",
-                        timestamp = System.currentTimeMillis() - 2400000,
-                        status = MessageStatus.READ,
-                        type = MessageType.VOICE
-                    )
-                ),
-                Chat(
-                    chatId = "c_saved",
-                    title = "Saved Messages",
-                    avatarUrl = "",
-                    isPinned = true,
-                    unreadCount = 0,
-                    lastMessage = LastMessageInfo(
-                        text = "JSON file persistence at context.filesDir/neont_db/",
-                        senderId = "me",
-                        timestamp = System.currentTimeMillis() - 3600000,
-                        status = MessageStatus.SENT,
-                        type = MessageType.TEXT
-                    )
-                )
+                Chat("c_pavel", "direct", "Pavel Durov", "", true, false, 2, emptyList(), LastMessageInfo("Native Android Kotlin + Jetpack Compose ready.", "u_pavel", System.currentTimeMillis() - 120000, MessageStatus.READ, MessageType.TEXT)),
+                Chat("c_elena", "direct", "Elena Rostova", "", false, false, 0, emptyList(), LastMessageInfo("Voice message (0:14)", "u_elena", System.currentTimeMillis() - 2400000, MessageStatus.READ, MessageType.VOICE)),
+                Chat("c_saved", "direct", "Saved Messages", "", true, false, 0, emptyList(), LastMessageInfo("JSON file persistence", "me", System.currentTimeMillis() - 3600000, MessageStatus.SENT, MessageType.TEXT))
             )
-            atomicWrite(chatsFile, initialChats)
+            writeJson("chats.json", initialChats)
         }
-
-        val pavelFile = File(dbDir, "messages_c_pavel.json")
-        if (!pavelFile.exists()) {
-            val msgs = listOf(
-                Message(
-                    msgId = "m_1",
-                    chatId = "c_pavel",
-                    senderId = "u_pavel",
-                    text = "Hello! Neont native Android code is running completely offline-first with JSON files.",
-                    type = MessageType.TEXT,
-                    status = MessageStatus.READ,
-                    timestamp = System.currentTimeMillis() - 600000
-                ),
-                Message(
-                    msgId = "m_2",
-                    chatId = "c_pavel",
-                    senderId = "me",
-                    text = "Confirmed! All UI components are rendered using 100% Jetpack Compose.",
-                    type = MessageType.TEXT,
-                    status = MessageStatus.READ,
-                    timestamp = System.currentTimeMillis() - 300000
-                ),
-                Message(
-                    msgId = "m_3",
-                    chatId = "c_pavel",
-                    senderId = "u_pavel",
-                    text = "Native Android Kotlin + Jetpack Compose ready.",
-                    type = MessageType.TEXT,
-                    status = MessageStatus.READ,
-                    timestamp = System.currentTimeMillis() - 120000
-                )
+        val usersFile = File(dbDir, "users.json")
+        if (!usersFile.exists()) {
+            val initialUsers = listOf(
+                User("u_pavel", "Pavel", "Durov", "durov", "", "Founder", "", false, 0L),
+                User("u_elena", "Elena", "Rostova", "elena", "", "Designer", "", false, 0L),
+                User("me", "You", "User", "me", "", "Hey there!", "", true, System.currentTimeMillis())
             )
-            atomicWrite(pavelFile, msgs)
+            writeJson("users.json", initialUsers)
         }
     }
 }

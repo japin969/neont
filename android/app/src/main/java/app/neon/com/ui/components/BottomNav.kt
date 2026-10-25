@@ -21,9 +21,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.neon.com.theme.BadgeUnread
-import app.neon.com.theme.TelegramDarkHeader
-import app.neon.com.theme.TelegramLightBlue
+import app.neon.com.ui.theme.*
+import app.neon.com.ui.theme.*
+import app.neon.com.ui.theme.*
 
 val MainTab.label: String get() = this.title
 
