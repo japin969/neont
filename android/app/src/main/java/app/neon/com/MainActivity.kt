@@ -176,6 +176,7 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                         inputStream.close()
                         val type = if (mimeType.startsWith("image/")) MessageType.IMAGE else if (mimeType.startsWith("video/")) MessageType.VIDEO else MessageType.FILE
                         chatRepo.sendMessage((currentScreen as Screen.Chat).chatId, "me", fileUrl, type, fileUrl)
+                        chats = fileDb.readChats() // Refresh list chat
                     }
                 } catch (e: Exception) { e.printStackTrace() } finally { isUploading = false }
             }
@@ -213,6 +214,7 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                 settings = appSettings,
                 fileDb = fileDb,
                 onChatClick = { chatId -> currentScreen = Screen.Chat(chatId) },
+                onSettingsClick = { currentScreen = Screen.Settings },
             )
         }
         is Screen.Chat -> {
@@ -226,6 +228,10 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                 fileDb = fileDb,
                 chatRepo = chatRepo,
                 onBackClicked = { currentScreen = Screen.Home },
+                onHeaderClick = {
+                    val user = contacts.firstOrNull { it.uid == screen.chatId } ?: currentUser
+                    if (user != null) currentScreen = Screen.UserProfile(user)
+                },
                 onSendMessage = { text ->
                     scope.launch { chatRepo.sendMessage(screen.chatId, "me", text) }
                 },
@@ -243,6 +249,7 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                                     val fileUrl = filebase.uploadFile(file.name, "audio/m4a", inputStream)
                                     inputStream.close()
                                     chatRepo.sendMessage(screen.chatId, "me", fileUrl, MessageType.VOICE, fileUrl)
+                                chats = fileDb.readChats() // Refresh list chat
                                 } catch (e: Exception) { e.printStackTrace() }
                             }
                         }
@@ -261,8 +268,12 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
             SettingsScreen(
                 currentUser = currentUser,
                 settings = appSettings,
+                onEditProfileClick = { currentScreen = Screen.EditProfile },
                 onPrivacyClick = { currentScreen = Screen.Privacy },
                 onNotificationClick = { currentScreen = Screen.Notification },
+                onDataStorageClick = { currentScreen = Screen.DataStorage },
+                onChatSettingsClick = { currentScreen = Screen.ChatSettings },
+                onLanguageClick = { currentScreen = Screen.Language },
                 onLogoutClick = { /* TODO: Login */ },
             )
         }
@@ -334,13 +345,14 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                 contacts = contacts,
                 fileDb = fileDb,
                 onChatClick = { chatId -> currentScreen = Screen.Chat(chatId) },
+                onSettingsClick = { currentScreen = Screen.Settings },
             )
         }
         is Screen.UserProfile -> {
             OtherProfileScreen(
                 user = screen.user,
                 onBackClick = { currentScreen = Screen.Home },
-                onSendMessageClick = { /* TODO: Buka Chat */ },
+                onSendMessageClick = { currentScreen = Screen.Chat(screen.user.uid) },
                 onVoiceCallClick = { /* TODO: Voice Call */ },
                 onVideoCallClick = { /* TODO: Video Call */ }
             )

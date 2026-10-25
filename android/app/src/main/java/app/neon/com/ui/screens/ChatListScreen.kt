@@ -110,13 +110,6 @@ fun ChatListScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { triggerRefresh() }) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Pull to Refresh",
-                            tint = Color.White
-                        )
-                    }
                     IconButton(onClick = onSearchClick) {
                         Icon(
                             imageVector = Icons.Default.Search,

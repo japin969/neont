@@ -32,6 +32,7 @@ fun MainScreen(
     onAddStoryClick: () -> Unit = {},
     onStoryCameraClick: () -> Unit = onAddStoryClick,
     onSearchClick: () -> Unit = {},
+    onSettingsClick: () -> Unit = {},
     onNewGroupClick: () -> Unit = {},
     onEditProfileClick: () -> Unit = {},
     onPrivacyClick: () -> Unit = {},
@@ -50,6 +51,7 @@ fun MainScreen(
             BottomNavBar(
                 selectedTab = currentTab,
                 onTabSelected = { tab ->
+                        if (tab == MainTab.SETTINGS) onSettingsClick()
                     currentTab = tab
                     tabNavController.navigate(tab.name) {
                         popUpTo(tabNavController.graph.startDestinationId) {

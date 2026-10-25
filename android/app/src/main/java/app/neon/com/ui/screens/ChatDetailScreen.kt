@@ -1,6 +1,7 @@
 package app.neon.com.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -42,6 +43,7 @@ fun ChatDetailScreen(
     onDeleteMessage: (msg: Message) -> Unit = {},
     onCallClick: () -> Unit = {},
     onAttachClick: (String) -> Unit = {},
+    onHeaderClick: () -> Unit = {},
     onMicClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -75,7 +77,10 @@ fun ChatDetailScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { onHeaderClick() }
+                    ) {
                         TelegramAvatar(name = chat?.title ?: "Chat", size = 40, isOnline = isContactOnline)
                         Spacer(Modifier.width(12.dp))
                         Column {
