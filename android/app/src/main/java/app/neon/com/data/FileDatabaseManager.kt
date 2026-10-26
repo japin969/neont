@@ -229,4 +229,20 @@ class FileDatabaseManager(private val context: Context) {
         val file = File(dbDir, "messages_${chatId}.json")
         atomicWrite(file, messages)
     }
+
+    private fun <T> atomicWrite(targetFile: File, data: T) {
+        val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp")
+        try {
+            FileWriter(tempFile).use { writer ->
+                gson.toJson(data, writer)
+            }
+            if (tempFile.exists()) {
+                if (targetFile.exists()) targetFile.delete()
+                tempFile.renameTo(targetFile)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            if (tempFile.exists()) tempFile.delete()
+        }
+    }
 }
