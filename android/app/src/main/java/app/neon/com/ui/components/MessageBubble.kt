@@ -31,6 +31,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessageBubble(
     message: Message,
@@ -128,6 +129,8 @@ fun MessageBubble(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun VoiceNotePlayer(message: Message) {
     var isPlaying by remember { mutableStateOf(false) }
