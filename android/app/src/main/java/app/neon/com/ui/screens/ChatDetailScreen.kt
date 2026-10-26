@@ -100,10 +100,6 @@ fun ChatDetailScreen(
                                 Text(formatLastSeen(lastSeenTimestamp), color = TelegramTextSecondary, fontSize = 13.sp)
                             } else {
                                 Text("last seen recently", color = TelegramTextSecondary, fontSize = 13.sp)
-                            } else if (isContactOnline) {
-                                Text("online", color = TelegramPrimary, fontSize = 13.sp)
-                            } else {
-                                Text("last seen recently", color = TelegramTextSecondary, fontSize = 13.sp)
                             }
                         }
                     }

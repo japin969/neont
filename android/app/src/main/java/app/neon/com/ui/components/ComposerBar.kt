@@ -111,8 +111,8 @@ fun ComposerBar(
                 AnimatedContent(
                     targetState = hasText,
                     transitionSpec = {
-                        (fadeIn(tween(200)) + scaleIn(initialScale = 0.2f, tween(200)))
-                            .togetherWith(fadeOut(tween(180)) + scaleOut(targetScale = 0.2f, tween(180)))
+                        (fadeIn(tween(200)) + scaleIn(initialScale = 0.2f))
+                            .togetherWith(fadeOut(tween(180)) + scaleOut(targetScale = 0.2f))
                     }, label = "composer_btn"
                 ) { targetHasText ->
                     val rotation by animateFloatAsState(if (targetHasText) 0f else -90f, tween(200), label = "rot")
