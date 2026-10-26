@@ -52,7 +52,9 @@ fun ChatDetailScreen(
     
     var showAttachSheet by remember { mutableStateOf(false) }
     var showEmojiKeyboard by remember { mutableStateOf(false) }
-    var textInput by remember { mutableStateOf("") } // State dikontrol di sini
+    var textInput by remember { mutableStateOf("") }
+    var selectedMessage by remember { mutableStateOf<Message?>(null) }
+    var showMessageDialog by remember { mutableStateOf(false) } // State dikontrol di sini
 
     val actualChatId = chatId ?: chat?.chatId ?: ""
     val displayMessages = messages ?: emptyList()
@@ -128,11 +130,36 @@ fun ChatDetailScreen(
                     MessageBubble(
                         message = msg,
                         isOutgoing = msg.senderId == currentUserId,
+                        onLongClick = { 
+                            selectedMessage = it
+                            showMessageDialog = true 
+                        },
                         modifier = Modifier.animateItem()
                     )
                 }
             }
 
+
+            if (showMessageDialog && selectedMessage != null) {
+                AlertDialog(
+                    onDismissRequest = { showMessageDialog = false },
+                    title = { Text("Pilih Aksi", color = Color.White) },
+                    containerColor = app.neon.com.ui.theme.TelegramSurface,
+                    text = {
+                        Column {
+                            TextButton(onClick = { 
+                                showMessageDialog = false
+                                onDeleteMessage(selectedMessage!!) 
+                            }) { Text("Hapus Pesan", color = Color.Red) }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showMessageDialog = false }) {
+                            Text("Batal", color = Color.White)
+                        }
+                    }
+                )
+            }
             ComposerBar(
                 text = textInput,
                 onTextChange = { textInput = it },

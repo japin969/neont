@@ -1,8 +1,9 @@
 package app.neon.com.ui.components
 
 import android.media.MediaPlayer
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,10 +30,12 @@ import coil.compose.AsyncImage
 import java.text.SimpleDateFormat
 import java.util.*
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessageBubble(
     message: Message,
     isOutgoing: Boolean,
+    onLongClick: (Message) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val bubbleShape = if (isOutgoing) {
@@ -54,6 +57,10 @@ fun MessageBubble(
                 .widthIn(min = 80.dp, max = 320.dp)
                 .clip(bubbleShape)
                 .background(bubbleBg)
+                .combinedClickable(
+                    onClick = {},
+                    onLongClick = { onLongClick(message) }
+                )
                 .padding(8.dp)
         ) {
             Column {
@@ -61,8 +68,7 @@ fun MessageBubble(
                     MessageType.IMAGE -> {
                         val url = if (!message.mediaUrl.isNullOrBlank()) message.mediaUrl else message.text
                         AsyncImage(
-                            model = url,
-                            contentDescription = "Image",
+                            model = url, contentDescription = "Image",
                             modifier = Modifier.fillMaxWidth().heightIn(max = 250.dp).clip(RoundedCornerShape(12.dp)),
                             contentScale = ContentScale.Crop
                         )
@@ -70,8 +76,7 @@ fun MessageBubble(
                     MessageType.VIDEO -> {
                         val url = if (!message.mediaUrl.isNullOrBlank()) message.mediaUrl else message.text
                         AsyncImage(
-                            model = url,
-                            contentDescription = "Video",
+                            model = url, contentDescription = "Video",
                             modifier = Modifier.fillMaxWidth().heightIn(max = 250.dp).clip(RoundedCornerShape(12.dp))
                         )
                     }
@@ -82,12 +87,7 @@ fun MessageBubble(
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(4.dp)) {
                             Icon(Icons.Default.InsertDriveFile, contentDescription = "File", tint = Color.White)
                             Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = message.mediaUrl?.substringAfterLast("/") ?: "File",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text(text = message.mediaUrl?.substringAfterLast("/") ?: "File", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                     else -> {
@@ -122,46 +122,30 @@ fun VoiceNotePlayer(message: Message) {
     val url = if (!message.mediaUrl.isNullOrBlank()) message.mediaUrl else message.text
 
     DisposableEffect(Unit) {
-        onDispose {
-            mediaPlayer?.release()
-            mediaPlayer = null
-        }
+        onDispose { mediaPlayer?.release(); mediaPlayer = null }
     }
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.clickable {
-            if (isPlaying) {
-                mediaPlayer?.pause()
-                isPlaying = false
-            } else {
-                if (mediaPlayer == null) {
-                    mediaPlayer = MediaPlayer().apply {
-                        setDataSource(url)
-                        prepare()
-                        setOnCompletionListener { isPlaying = false }
+        modifier = Modifier.combinedClickable(
+            onClick = {
+                if (isPlaying) { mediaPlayer?.pause(); isPlaying = false }
+                else {
+                    if (mediaPlayer == null) {
+                        mediaPlayer = MediaPlayer().apply {
+                            setDataSource(url); prepare(); setOnCompletionListener { isPlaying = false }
+                        }
                     }
+                    mediaPlayer?.start(); isPlaying = true
                 }
-                mediaPlayer?.start()
-                isPlaying = true
-            }
-        }.padding(8.dp)
+            },
+            onLongClick = {}
+        ).padding(8.dp)
     ) {
-        Box(
-            modifier = Modifier.size(36.dp).clip(CircleShape).background(Color.White),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = if (isPlaying) Icons.Default.PlayArrow else Icons.Default.PlayArrow,
-                contentDescription = "Play",
-                tint = Color.Black
-            )
+        Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.PlayArrow, "Play", tint = Color.Black)
         }
         Spacer(Modifier.width(8.dp))
-        Text(
-            text = if (isPlaying) "Playing..." else "Voice Message",
-            color = Color.White,
-            fontSize = 14.sp
-        )
+        Text(text = if (isPlaying) "Playing..." else "Voice Message", color = Color.White, fontSize = 14.sp)
     }
 }

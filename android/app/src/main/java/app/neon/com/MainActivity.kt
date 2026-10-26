@@ -91,7 +91,6 @@ fun AppRoot(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Cont
     }
 }
 
-// State navigasi sederhana
 sealed class Screen {
     object Home : Screen()
     object Settings : Screen()
@@ -101,10 +100,10 @@ sealed class Screen {
     object DataStorage : Screen()
     object ChatSettings : Screen()
     object Language : Screen()
-    object Devices : Screen()
     object Search : Screen()
-    data class UserProfile(val user: User) : Screen()
+    object CreateGroup : Screen()
     data class Chat(val chatId: String) : Screen()
+    data class UserProfile(val user: User) : Screen()
 }
 
 @Composable
@@ -200,7 +199,7 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
     }
 
     BackHandler(enabled = currentScreen !is Screen.Home) {
-        currentScreen = if (currentScreen is Screen.Chat) Screen.Home else Screen.Home
+        currentScreen = Screen.Home
     }
 
     when (val screen = currentScreen) {
@@ -214,6 +213,12 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                 settings = appSettings,
                 fileDb = fileDb,
                 onChatClick = { chatId -> currentScreen = Screen.Chat(chatId) },
+                onSearchClick = { currentScreen = Screen.Search },
+                onContactClick = { user -> currentScreen = Screen.UserProfile(user) },
+                onNewGroupClick = { currentScreen = Screen.CreateGroup },
+                onSettingsClick = { currentScreen = Screen.Settings },
+                onAddStoryClick = { /* TODO: Story */ },
+                onStoryClick = { /* TODO: Story */ }
             )
         }
         is Screen.Chat -> {
@@ -227,6 +232,9 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                 fileDb = fileDb,
                 chatRepo = chatRepo,
                 onBackClicked = { currentScreen = Screen.Home },
+                onDeleteMessage = { msg ->
+                    scope.launch { chatRepo.deleteMessage(screen.chatId, msg.msgId) }
+                },
                 onHeaderClick = {
                     val user = contacts.firstOrNull { it.uid == screen.chatId } ?: currentUser
                     if (user != null) currentScreen = Screen.UserProfile(user)
@@ -248,7 +256,7 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                                     val fileUrl = filebase.uploadFile(file.name, "audio/m4a", inputStream)
                                     inputStream.close()
                                     chatRepo.sendMessage(screen.chatId, "me", fileUrl, MessageType.VOICE, fileUrl)
-                                chats = fileDb.readChats() // Refresh list chat
+                                    chats = fileDb.readChats() // Refresh list chat
                                 } catch (e: Exception) { e.printStackTrace() }
                             }
                         }
@@ -273,7 +281,7 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                 onDataStorageClick = { currentScreen = Screen.DataStorage },
                 onChatSettingsClick = { currentScreen = Screen.ChatSettings },
                 onLanguageClick = { currentScreen = Screen.Language },
-                onLogoutClick = { /* TODO: Login */ },
+                onLogoutClick = { /* TODO: Login */ }
             )
         }
         is Screen.Privacy -> {
@@ -311,31 +319,32 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
             )
         }
         is Screen.DataStorage -> {
-            GenericSettingsScreen(
-                title = "Data and Storage",
-                description = "Pengaturan penyimpanan dan cache akan tersedia di pembaruan selanjutnya.",
-                onBackClick = { currentScreen = Screen.Settings }
-            )
+            GenericSettingsScreen("Data and Storage", "Pengaturan penyimpanan dan cache akan tersedia di pembaruan selanjutnya.", { currentScreen = Screen.Settings })
         }
         is Screen.ChatSettings -> {
-            GenericSettingsScreen(
-                title = "Chat Settings",
-                description = "Pengaturan chat (wallpaper, font size, dll) akan tersedia di pembaruan selanjutnya.",
-                onBackClick = { currentScreen = Screen.Settings }
-            )
+            GenericSettingsScreen("Chat Settings", "Pengaturan chat akan tersedia di pembaruan selanjutnya.", { currentScreen = Screen.Settings })
         }
         is Screen.Language -> {
-            GenericSettingsScreen(
-                title = "Language",
-                description = "Saat ini hanya mendukung Bahasa Indonesia & English (otomatis).",
-                onBackClick = { currentScreen = Screen.Settings }
-            )
+            GenericSettingsScreen("Language", "Saat ini hanya mendukung Bahasa Indonesia & English.", { currentScreen = Screen.Settings })
         }
-        is Screen.Devices -> {
-            GenericSettingsScreen(
-                title = "Devices",
-                description = "Belum ada perangkat lain yang terhubung.",
-                onBackClick = { currentScreen = Screen.Settings }
+        is Screen.CreateGroup -> {
+            CreateGroupScreen(
+                contacts = contacts,
+                onGroupCreated = { groupName, selectedUids ->
+                    scope.launch {
+                        val newChatId = "group_${System.currentTimeMillis()}"
+                        val newChat = Chat(
+                            chatId = newChatId,
+                            type = "group",
+                            title = groupName,
+                            memberUids = selectedUids + "me"
+                        )
+                        fileDb.upsertChat(newChat)
+                        chats = fileDb.readChats()
+                        currentScreen = Screen.Home
+                    }
+                },
+                onBackClick = { currentScreen = Screen.Home }
             )
         }
         is Screen.Search -> {
@@ -344,6 +353,7 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                 contacts = contacts,
                 fileDb = fileDb,
                 onChatClick = { chatId -> currentScreen = Screen.Chat(chatId) },
+                onContactClick = { user -> currentScreen = Screen.UserProfile(user) }
             )
         }
         is Screen.UserProfile -> {
@@ -357,5 +367,3 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
         }
     }
 }
-
-

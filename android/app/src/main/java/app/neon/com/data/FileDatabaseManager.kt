@@ -159,3 +159,38 @@ class FileDatabaseManager(private val context: Context) {
         }
     }
 }
+
+// --- FITUR HAPUS & EDIT PESAN ---
+fun deleteMessage(chatId: String, msgId: String) {
+    val file = File(dbDir, "messages_${chatId}.json")
+    if (!file.exists()) return
+    try {
+        val currentList: MutableList<Message> = FileReader(file).use { 
+            gson.fromJson(it, object : TypeToken<MutableList<Message>>() {}.type) ?: mutableListOf() 
+        }
+        currentList.removeAll { it.msgId == msgId }
+        atomicWrite(file, currentList)
+    } catch (e: Exception) { e.printStackTrace() }
+}
+
+fun updateMessage(chatId: String, msgId: String, newText: String) {
+    val file = File(dbDir, "messages_${chatId}.json")
+    if (!file.exists()) return
+    try {
+        val currentList: MutableList<Message> = FileReader(file).use { 
+            gson.fromJson(it, object : TypeToken<MutableList<Message>>() {}.type) ?: mutableListOf() 
+        }
+        val index = currentList.indexOfFirst { it.msgId == msgId }
+        if (index >= 0) {
+            // Enkripsi ulang teks baru
+            val encrypted = RealMessageCrypto.encrypt(newText, chatId)
+            currentList[index] = currentList[index].copy(
+                text = "",
+                cipherText = encrypted.cipherText,
+                iv = encrypted.iv,
+                encryptedKey = encrypted.encryptedKey
+            )
+            atomicWrite(file, currentList)
+        }
+    } catch (e: Exception) { e.printStackTrace() }
+}

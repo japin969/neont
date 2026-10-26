@@ -121,6 +121,17 @@ class ChatRepository(private val fileDb: FileDatabaseManager) {
     }
 
     // 4. Listener Pesan per Chat
+
+    suspend fun deleteMessage(chatId: String, msgId: String) {
+        fileDb.deleteMessage(chatId, msgId)
+        database.getReference("messages").child(chatId).child(msgId).removeValue()
+    }
+
+    suspend fun editMessage(chatId: String, msgId: String, newText: String) {
+        fileDb.updateMessage(chatId, msgId, newText)
+        database.getReference("messages").child(chatId).child(msgId).child("text").setValue(newText)
+    }
+
     fun listenToMessages(chatId: String): Flow<List<Message>> = callbackFlow {
         trySend(fileDb.readMessages(chatId))
         val ref = database.getReference("messages").child(chatId)
