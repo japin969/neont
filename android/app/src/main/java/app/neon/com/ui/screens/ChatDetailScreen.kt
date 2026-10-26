@@ -34,6 +34,7 @@ fun ChatDetailScreen(
     currentUserId: String = "me",
     isContactOnline: Boolean = true,
     isContactTyping: Boolean = false,
+    lastSeenTimestamp: Long = 0L,
     fileDb: FileDatabaseManager? = null,
     chatRepo: ChatRepository? = null,
     onBackClick: () -> Unit = {},
@@ -41,6 +42,8 @@ fun ChatDetailScreen(
     onSendMessage: (text: String) -> Unit = {},
     onTyping: (isTyping: Boolean) -> Unit = {},
     onDeleteMessage: (msg: Message) -> Unit = {},
+    onEditMessage: (msg: Message, newText: String) -> Unit = { msg, _ -> },
+    onReactMessage: (msg: Message, emoji: String) -> Unit = { msg, _ -> },
     onCallClick: () -> Unit = {},
     onAttachClick: (String) -> Unit = {},
     onHeaderClick: () -> Unit = {},
@@ -54,6 +57,8 @@ fun ChatDetailScreen(
     var showEmojiKeyboard by remember { mutableStateOf(false) }
     var textInput by remember { mutableStateOf("") }
     var selectedMessage by remember { mutableStateOf<Message?>(null) }
+    var replyingTo by remember { mutableStateOf<Message?>(null) }
+    var editingMessage by remember { mutableStateOf<Message?>(null) }
     var showMessageDialog by remember { mutableStateOf(false) } // State dikontrol di sini
 
     val actualChatId = chatId ?: chat?.chatId ?: ""
@@ -89,6 +94,12 @@ fun ChatDetailScreen(
                             Text(chat?.title ?: "Chat", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                             if (isContactTyping) {
                                 Text("typing...", color = TelegramPrimary, fontSize = 13.sp)
+                            } else if (isContactOnline) {
+                                Text("online", color = TelegramPrimary, fontSize = 13.sp)
+                            } else if (lastSeenTimestamp > 0) {
+                                Text(formatLastSeen(lastSeenTimestamp), color = TelegramTextSecondary, fontSize = 13.sp)
+                            } else {
+                                Text("last seen recently", color = TelegramTextSecondary, fontSize = 13.sp)
                             } else if (isContactOnline) {
                                 Text("online", color = TelegramPrimary, fontSize = 13.sp)
                             } else {
@@ -149,6 +160,29 @@ fun ChatDetailScreen(
                         Column {
                             TextButton(onClick = { 
                                 showMessageDialog = false
+                                replyingTo = selectedMessage
+                            }) { Text("Balas (Reply)", color = Color.White) }
+                            TextButton(onClick = { 
+                                showMessageDialog = false
+                                if (selectedMessage?.senderId == currentUserId) {
+                                    editingMessage = selectedMessage
+                                    textInput = selectedMessage?.text ?: ""
+                                }
+                            }) { Text("Edit Pesan", color = Color.White) }
+                            TextButton(onClick = { 
+                                showMessageDialog = false
+                                // TODO: Forward logic
+                            }) { Text("Teruskan (Forward)", color = Color.White) }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf("👍", "❤️", "😂", "😮", "😢", "🔥").forEach { emoji ->
+                                    TextButton(onClick = {
+                                        showMessageDialog = false
+                                        onReactMessage(selectedMessage!!, emoji)
+                                    }) { Text(emoji, fontSize = 20.sp) }
+                                }
+                            }
+                            TextButton(onClick = { 
+                                showMessageDialog = false
                                 onDeleteMessage(selectedMessage!!) 
                             }) { Text("Hapus Pesan", color = Color.Red) }
                         }
@@ -165,13 +199,17 @@ fun ChatDetailScreen(
                 onTextChange = { textInput = it },
                 onSendMessage = { text ->
                     if (text.isNotBlank()) {
-                        if (onSendMessage != {}) {
+                        if (editingMessage != null) {
+                            onEditMessage(editingMessage!!, text)
+                            editingMessage = null
+                        } else if (onSendMessage != {}) {
                             onSendMessage(text)
                         } else if (chatRepo != null && actualChatId.isNotBlank()) {
                             scope.launch {
                                 chatRepo.sendMessage(actualChatId, currentUserId, text)
                             }
                         }
+                        replyingTo = null
                         textInput = "" // Reset setelah kirim
                         showEmojiKeyboard = false
                     }
@@ -179,7 +217,9 @@ fun ChatDetailScreen(
                 onTyping = onTyping,
                 onAttachClick = { showAttachSheet = true },
                 onMicClick = onMicClick,
-                onEmojiClick = { showEmojiKeyboard = !showEmojiKeyboard }
+                onEmojiClick = { showEmojiKeyboard = !showEmojiKeyboard },
+                replyingTo = replyingTo?.let { "${it.senderId}: ${it.text}" },
+                onCancelReply = { replyingTo = null }
             )
 
             if (showEmojiKeyboard) {
@@ -193,5 +233,17 @@ fun ChatDetailScreen(
                 )
             }
         }
+    }
+}
+
+fun formatLastSeen(timestamp: Long): String {
+    if (timestamp <= 0) return "last seen recently"
+    val diff = System.currentTimeMillis() - timestamp
+    val minutes = diff / (1000 * 60)
+    return when {
+        minutes < 1 -> "last seen just now"
+        minutes < 60 -> "last seen $minutes minutes ago"
+        minutes < 1440 -> "last seen ${minutes / 60} hours ago"
+        else -> "last seen ${minutes / 1440} days ago"
     }
 }

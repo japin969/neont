@@ -95,6 +95,19 @@ fun MessageBubble(
                     }
                 }
 
+
+                // Tampilan Reaction
+                if (!message.reactions.isNullOrEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .padding(top = 4.dp)
+                            .background(Color(0xFF2B5278), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(message.reactions.values.joinToString(" "), fontSize = 12.sp)
+                    }
+                }
                 Row(
                     modifier = Modifier.align(Alignment.End).padding(top = 4.dp),
                     verticalAlignment = Alignment.CenterVertically

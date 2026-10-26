@@ -158,39 +158,75 @@ class FileDatabaseManager(private val context: Context) {
             writeJson("users.json", initialUsers)
         }
     }
-}
 
-// --- FITUR HAPUS & EDIT PESAN ---
-fun deleteMessage(chatId: String, msgId: String) {
-    val file = File(dbDir, "messages_${chatId}.json")
-    if (!file.exists()) return
-    try {
-        val currentList: MutableList<Message> = FileReader(file).use { 
-            gson.fromJson(it, object : TypeToken<MutableList<Message>>() {}.type) ?: mutableListOf() 
-        }
-        currentList.removeAll { it.msgId == msgId }
-        atomicWrite(file, currentList)
-    } catch (e: Exception) { e.printStackTrace() }
-}
-
-fun updateMessage(chatId: String, msgId: String, newText: String) {
-    val file = File(dbDir, "messages_${chatId}.json")
-    if (!file.exists()) return
-    try {
-        val currentList: MutableList<Message> = FileReader(file).use { 
-            gson.fromJson(it, object : TypeToken<MutableList<Message>>() {}.type) ?: mutableListOf() 
-        }
-        val index = currentList.indexOfFirst { it.msgId == msgId }
-        if (index >= 0) {
-            // Enkripsi ulang teks baru
-            val encrypted = RealMessageCrypto.encrypt(newText, chatId)
-            currentList[index] = currentList[index].copy(
-                text = "",
-                cipherText = encrypted.cipherText,
-                iv = encrypted.iv,
-                encryptedKey = encrypted.encryptedKey
-            )
+    // --- FITUR HAPUS & EDIT PESAN ---
+    fun deleteMessage(chatId: String, msgId: String) {
+        val file = File(dbDir, "messages_${chatId}.json")
+        if (!file.exists()) return
+        try {
+            val currentList: MutableList<Message> = FileReader(file).use { 
+                gson.fromJson(it, object : TypeToken<MutableList<Message>>() {}.type) ?: mutableListOf() 
+            }
+            currentList.removeAll { it.msgId == msgId }
             atomicWrite(file, currentList)
-        }
-    } catch (e: Exception) { e.printStackTrace() }
+            
+            // Refresh preview chat
+            val chatsFile = File(dbDir, "chats.json")
+            if (chatsFile.exists()) {
+                val chats: MutableList<Chat> = FileReader(chatsFile).use {
+                    gson.fromJson(it, object : TypeToken<MutableList<Chat>>() {}.type) ?: mutableListOf()
+                }
+                val index = chats.indexOfFirst { it.chatId == chatId }
+                if (index >= 0) {
+                    val lastMsg = currentList.lastOrNull()
+                    chats[index] = chats[index].copy(
+                        lastMessage = lastMsg?.let { LastMessageInfo(it.text, it.senderId, it.timestamp, it.status, it.type) }
+                    )
+                    atomicWrite(chatsFile, chats)
+                }
+            }
+        } catch (e: Exception) { e.printStackTrace() }
+    }
+
+    fun updateMessage(chatId: String, msgId: String, newText: String) {
+        val file = File(dbDir, "messages_${chatId}.json")
+        if (!file.exists()) return
+        try {
+            val currentList: MutableList<Message> = FileReader(file).use { 
+                gson.fromJson(it, object : TypeToken<MutableList<Message>>() {}.type) ?: mutableListOf() 
+            }
+            val index = currentList.indexOfFirst { it.msgId == msgId }
+            if (index >= 0) {
+                val encrypted = RealMessageCrypto.encrypt(newText, chatId)
+                currentList[index] = currentList[index].copy(
+                    text = "",
+                    cipherText = encrypted.cipherText,
+                    iv = encrypted.iv,
+                    encryptedKey = encrypted.encryptedKey
+                )
+                atomicWrite(file, currentList)
+                
+                // Refresh preview chat
+                val chatsFile = File(dbDir, "chats.json")
+                if (chatsFile.exists()) {
+                    val chats: MutableList<Chat> = FileReader(chatsFile).use {
+                        gson.fromJson(it, object : TypeToken<MutableList<Chat>>() {}.type) ?: mutableListOf()
+                    }
+                    val chatIndex = chats.indexOfFirst { it.chatId == chatId }
+                    if (chatIndex >= 0) {
+                        val lastMsg = currentList.lastOrNull()
+                        chats[chatIndex] = chats[chatIndex].copy(
+                            lastMessage = lastMsg?.let { LastMessageInfo(newText, it.senderId, it.timestamp, it.status, it.type) }
+                        )
+                        atomicWrite(chatsFile, chats)
+                    }
+                }
+            }
+        } catch (e: Exception) { e.printStackTrace() }
+    }
+
+    fun saveMessages(chatId: String, messages: List<Message>) {
+        val file = File(dbDir, "messages_${chatId}.json")
+        atomicWrite(file, messages)
+    }
 }

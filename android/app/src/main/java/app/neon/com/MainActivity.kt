@@ -118,6 +118,8 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
     var currentUser by remember { mutableStateOf<User?>(null) }
     var chatMessages by remember { mutableStateOf<List<Message>>(emptyList()) }
     var isContactOnline by remember { mutableStateOf(false) }
+    var lastSeenTimestamp by remember { mutableStateOf(0L) }
+    var isContactTyping by remember { mutableStateOf(false) }
     var isUploading by remember { mutableStateOf(false) }
     var appSettings by remember { mutableStateOf(AppSettings()) }
 
@@ -148,7 +150,13 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                 }
             }
             launch {
-                chatRepo.listenToUserPresence(chatId).collect { online -> isContactOnline = online }
+                chatRepo.listenToUserPresence(chatId).collect { (online, lastSeen) ->
+                    isContactOnline = online
+                    lastSeenTimestamp = lastSeen
+                }
+            }
+            launch {
+                chatRepo.listenToTyping(chatId, chatId).collect { typing -> isContactTyping = typing }
             }
         } else {
             chatMessages = emptyList()
@@ -229,9 +237,17 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                 messages = chatMessages,
                 currentUserId = "me",
                 isContactOnline = isContactOnline,
+                isContactTyping = isContactTyping,
+                lastSeenTimestamp = lastSeenTimestamp,
                 fileDb = fileDb,
                 chatRepo = chatRepo,
                 onBackClicked = { currentScreen = Screen.Home },
+                onEditMessage = { msg, newText ->
+                    scope.launch { chatRepo.editMessage(screen.chatId, msg.msgId, newText) }
+                },
+                onReactMessage = { msg, emoji ->
+                    scope.launch { chatRepo.reactToMessage(screen.chatId, msg.msgId, "me", emoji) }
+                },
                 onDeleteMessage = { msg ->
                     scope.launch { chatRepo.deleteMessage(screen.chatId, msg.msgId) }
                 },
@@ -239,6 +255,7 @@ fun NeontApp(fileDb: FileDatabaseManager, chatRepo: ChatRepository, context: Con
                     val user = contacts.firstOrNull { it.uid == screen.chatId } ?: currentUser
                     if (user != null) currentScreen = Screen.UserProfile(user)
                 },
+                onTyping = { typing -> chatRepo.setTypingStatus(screen.chatId, "me", typing) },
                 onSendMessage = { text ->
                     scope.launch { chatRepo.sendMessage(screen.chatId, "me", text) }
                 },

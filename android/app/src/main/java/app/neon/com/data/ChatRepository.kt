@@ -56,16 +56,37 @@ class ChatRepository(private val fileDb: FileDatabaseManager) {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val connected = snapshot.getValue(Boolean::class.java) ?: false
                 if (connected) {
-                    presenceRef.onDisconnect().setValue(false)
-                    presenceRef.setValue(true)
+                    presenceRef.child("online").onDisconnect().setValue(false)
+                    presenceRef.child("lastSeen").onDisconnect().setValue(ServerValue.TIMESTAMP)
+                    presenceRef.child("online").setValue(true)
                 }
             }
             override fun onCancelled(error: DatabaseError) {}
         })
     }
 
-    fun listenToUserPresence(userId: String): Flow<Boolean> = callbackFlow {
+
+    fun listenToUserPresence(userId: String): Flow<Pair<Boolean, Long>> = callbackFlow {
         val ref = database.getReference("presence").child(userId)
+        val listener = object : com.google.firebase.database.ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val online = snapshot.child("online").getValue(Boolean::class.java) ?: false
+                val lastSeen = snapshot.child("lastSeen").getValue(Long::class.java) ?: 0L
+                trySend(Pair(online, lastSeen))
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        }
+        ref.addValueEventListener(listener)
+        awaitClose { ref.removeEventListener(listener) }
+    }
+
+    fun setTypingStatus(chatId: String, userId: String, isTyping: Boolean) {
+        val ref = database.getReference("typing").child(chatId).child(userId)
+        ref.setValue(isTyping)
+    }
+
+    fun listenToTyping(chatId: String, otherUserId: String): Flow<Boolean> = callbackFlow {
+        val ref = database.getReference("typing").child(chatId).child(otherUserId)
         val listener = object : com.google.firebase.database.ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 trySend(snapshot.getValue(Boolean::class.java) ?: false)
@@ -75,6 +96,7 @@ class ChatRepository(private val fileDb: FileDatabaseManager) {
         ref.addValueEventListener(listener)
         awaitClose { ref.removeEventListener(listener) }
     }
+
 
     // 3. Kirim Pesan
     suspend fun sendMessage(
@@ -130,6 +152,25 @@ class ChatRepository(private val fileDb: FileDatabaseManager) {
     suspend fun editMessage(chatId: String, msgId: String, newText: String) {
         fileDb.updateMessage(chatId, msgId, newText)
         database.getReference("messages").child(chatId).child(msgId).child("text").setValue(newText)
+    }
+
+
+    suspend fun reactToMessage(chatId: String, msgId: String, userId: String, emoji: String?) {
+        val ref = database.getReference("messages").child(chatId).child(msgId).child("reactions")
+        if (emoji == null) {
+            ref.child(userId).removeValue()
+        } else {
+            ref.child(userId).setValue(emoji)
+        }
+        // Update lokal (opsional, biar langsung keliatan)
+        val msgs = fileDb.readMessages(chatId).toMutableList()
+        val idx = msgs.indexOfFirst { it.msgId == msgId }
+        if (idx >= 0) {
+            val currentReactions = msgs[idx].reactions?.toMutableMap() ?: mutableMapOf()
+            if (emoji == null) currentReactions.remove(userId) else currentReactions[userId] = emoji
+            msgs[idx] = msgs[idx].copy(reactions = currentReactions)
+            fileDb.saveMessages(chatId, msgs)
+        }
     }
 
     fun listenToMessages(chatId: String): Flow<List<Message>> = callbackFlow {

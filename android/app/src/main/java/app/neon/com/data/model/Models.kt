@@ -57,7 +57,8 @@ data class Message(
     val replyToMsgId: String? = null,
     val status: MessageStatus = MessageStatus.SENT,
     val timestamp: Long = 0L,
-    val waveform: List<Int>? = null
+    val waveform: List<Int>? = null,
+    val reactions: Map<String, String>? = null // Map<UserId, Emoji>
 )
 
 data class Story(
